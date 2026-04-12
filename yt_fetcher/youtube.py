@@ -11,6 +11,7 @@ def download_media(url: str, out_dir: Path, dl_sub: bool, dl_mp3: bool, dl_mp4: 
         'ignoreconfig': True,
         'updatetime': False, # equivalent to --no-mtime
         'quiet': False,
+        'nocheckcertificate': True, # Overcome PyInstaller SSL limitations across distros
     }
 
     if dl_sub:
