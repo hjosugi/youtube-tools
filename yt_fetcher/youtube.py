@@ -20,6 +20,8 @@ def download_media(url: str, out_dir: Path, dl_sub: bool, dl_mp3: bool, dl_mp4: 
 
     # Split subtitle download and media download to avoid yt-dlp post-processing 
     # (like --embed-subs global configs or ffmpeg crashes) from wiping out the .srt files.
+    # If experiencing bot blocks, use "--cookies", "cookies.txt" (after exporting via extension),
+    # but avoid "--cookies-from-browser chrome" as it crashes on Linux if Chrome is open.
     cmd_base = choose_yt_dlp_command() + ["--ignore-config", "--no-mtime", "-P", str(out_dir)]
 
     if dl_sub:
