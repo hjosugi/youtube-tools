@@ -39,6 +39,17 @@
                     MP4 Video
                 </label>
             </div>
+            
+            <div class="resolution-group" id="resolution-group" style="display: none; margin-bottom: 24px; animation: fadeUp 0.3s ease-out;">
+                <label for="resolution">MP4 Resolution</label>
+                <select name="resolution" id="resolution" class="custom-select">
+                    <option value="best">Best Available (Auto)</option>
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                    <option value="480">480p</option>
+                    <option value="360">360p</option>
+                </select>
+            </div>
 
             <button type="submit" id="submit-btn" class="glow-on-hover" disabled>
                 <span class="btn-text">Download</span>

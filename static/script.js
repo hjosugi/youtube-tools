@@ -35,11 +35,17 @@ document.getElementById('download-form').addEventListener('submit', async (e) =>
         // Extract filename from Content-Disposition header if possible
         const disposition = response.headers.get('Content-Disposition');
         let filename = 'youtube_downloads.zip';
-        if (disposition && disposition.indexOf('filename=') !== -1) {
-            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-            const matches = filenameRegex.exec(disposition);
-            if (matches != null && matches[1]) { 
-                filename = matches[1].replace(/['"]/g, '');
+        if (disposition) {
+            const utf8Regex = /filename\*=utf-8''([^;\n]*)/i;
+            const matchesUtf8 = utf8Regex.exec(disposition);
+            if (matchesUtf8 != null && matchesUtf8[1]) {
+                filename = decodeURIComponent(matchesUtf8[1]);
+            } else {
+                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/i;
+                const matches = filenameRegex.exec(disposition);
+                if (matches != null && matches[1]) { 
+                    filename = matches[1].replace(/['"]/g, '');
+                }
             }
         }
         
@@ -93,10 +99,19 @@ const checkboxes = [
     document.getElementById('mp4')
 ];
 const submitBtn = document.getElementById('submit-btn');
+const mp4Checkbox = document.getElementById('mp4');
+const resolutionGroup = document.getElementById('resolution-group');
 
 function updateButtonState() {
     const anyChecked = checkboxes.some(cb => cb.checked);
     submitBtn.disabled = !anyChecked;
+    
+    // Toggle resolution dropdown visibility
+    if (mp4Checkbox.checked) {
+        resolutionGroup.style.display = 'block';
+    } else {
+        resolutionGroup.style.display = 'none';
+    }
 }
 
 checkboxes.forEach(cb => cb.addEventListener('change', updateButtonState));

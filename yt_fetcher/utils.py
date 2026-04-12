@@ -3,11 +3,17 @@ import re
 from pathlib import Path
 
 def run(cmd: list[str]) -> None:
-    subprocess.run(cmd, check=True)
+    subprocess.run(cmd, check=False)
 
 def base_stem(path: Path) -> str:
     # Keep the root name stripping out all extensions like .en.srt
-    return path.name.split('.')[0]
+    name = path.name.split('.')[0]
+    # Remove yt-dlp [YoutubeID] suffix if present
+    name = re.sub(r'\s\[[a-zA-Z0-9_-]{11}\]$', '', name)
+    # Truncate to 20 characters
+    if len(name) > 20:
+        name = name[:20]
+    return name.strip()
 
 def clean_subtitle_text(text: str) -> str:
     # Remove formatting tags like <i>, <b>, <font>

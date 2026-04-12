@@ -38,6 +38,7 @@ async def download_endpoint(
     subtitles: bool = Form(False),
     mp3: bool = Form(False),
     mp4: bool = Form(False),
+    resolution: str = Form("best"),
 ):
     url_list = [line.strip() for line in urls.splitlines() if line.strip()]
     if not url_list:
@@ -54,7 +55,7 @@ async def download_endpoint(
         errors = []
         for url in url_list:
             try:
-                sub_path, mp3_path, mp4_path = download_media(url, tmp_dir, dl_sub=subtitles, dl_mp3=mp3, dl_mp4=mp4)
+                sub_path, mp3_path, mp4_path = download_media(url, tmp_dir, dl_sub=subtitles, dl_mp3=mp3, dl_mp4=mp4, resolution=resolution)
                 
                 if subtitles and sub_path:
                     rows = parse_subtitle_file(sub_path)
@@ -65,10 +66,20 @@ async def download_endpoint(
                     sub_path.unlink(missing_ok=True)
                     
                 if mp3 and mp3_path:
-                    generated_files.append(mp3_path)
+                    new_mp3 = tmp_dir / f"{base_stem(mp3_path)}{mp3_path.suffix}"
+                    if not new_mp3.exists():
+                        mp3_path.rename(new_mp3)
+                        generated_files.append(new_mp3)
+                    else:
+                        generated_files.append(mp3_path)
                     
                 if mp4 and mp4_path:
-                    generated_files.append(mp4_path)
+                    new_mp4 = tmp_dir / f"{base_stem(mp4_path)}{mp4_path.suffix}"
+                    if not new_mp4.exists():
+                        mp4_path.rename(new_mp4)
+                        generated_files.append(new_mp4)
+                    else:
+                        generated_files.append(mp4_path)
             except Exception as e:
                 print(f"Error processing {url}: {e}")
                 errors.append(str(e))
