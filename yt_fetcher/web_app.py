@@ -50,28 +50,46 @@ async def download_endpoint(
     zip_path = tmp_dir / "downloads.zip"
 
     try:
-        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-            for url in url_list:
-                try:
-                    sub_path, mp3_path, mp4_path = download_media(url, tmp_dir, dl_sub=subtitles, dl_mp3=mp3, dl_mp4=mp4)
+        generated_files = []
+        errors = []
+        for url in url_list:
+            try:
+                sub_path, mp3_path, mp4_path = download_media(url, tmp_dir, dl_sub=subtitles, dl_mp3=mp3, dl_mp4=mp4)
+                
+                if subtitles and sub_path:
+                    rows = parse_subtitle_file(sub_path)
+                    stem = base_stem(sub_path)
+                    tsv_path = tmp_dir / f"{stem}.tsv"
+                    write_tsv(rows, tsv_path)
+                    generated_files.append(tsv_path)
+                    sub_path.unlink(missing_ok=True)
                     
-                    if subtitles and sub_path:
-                        rows = parse_subtitle_file(sub_path)
-                        stem = base_stem(sub_path)
-                        tsv_path = tmp_dir / f"{stem}.tsv"
-                        write_tsv(rows, tsv_path)
-                        zf.write(tsv_path, tsv_path.name)
-                        sub_path.unlink(missing_ok=True)
-                        
-                    if mp3 and mp3_path:
-                        zf.write(mp3_path, mp3_path.name)
-                        
-                    if mp4 and mp4_path:
-                        zf.write(mp4_path, mp4_path.name)
-                except Exception as e:
-                    print(f"Error processing {url}: {e}")
+                if mp3 and mp3_path:
+                    generated_files.append(mp3_path)
+                    
+                if mp4 and mp4_path:
+                    generated_files.append(mp4_path)
+            except Exception as e:
+                print(f"Error processing {url}: {e}")
+                errors.append(str(e))
         
         background_tasks.add_task(cleanup_dir, tmp_dir)
+        
+        if not generated_files:
+            error_details = " | ".join(errors) if errors else "No English subtitles found or matches condition."
+            raise HTTPException(status_code=500, detail=f"Failed to fetch any files. Reason: {error_details}")
+            
+        if len(generated_files) == 1:
+            single_file = generated_files[0]
+            return FileResponse(
+                path=single_file,
+                filename=single_file.name
+            )
+
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in generated_files:
+                zf.write(f, f.name)
+                
         return FileResponse(
             path=zip_path,
             filename="youtube_downloads.zip",

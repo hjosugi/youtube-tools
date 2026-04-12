@@ -47,12 +47,12 @@ def download_media(url: str, out_dir: Path, dl_sub: bool, dl_mp3: bool, dl_mp4: 
         else:
             return None, None, None
         
-    cmd.extend(["-P", str(out_dir), url])
+    cmd.extend(["--no-mtime", "-P", str(out_dir), url])
     run(cmd)
 
     sub_path, mp3_path, mp4_path = None, None, None
     candidates = sorted(
-        [p for p in out_dir.iterdir() if p.stat().st_mtime >= before and p.is_file()],
+        [p for p in out_dir.iterdir() if p.is_file()],
         key=lambda p: p.stat().st_mtime,
         reverse=True
     )
