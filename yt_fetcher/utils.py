@@ -5,10 +5,10 @@ from pathlib import Path
 def base_stem(path: Path) -> str:
     name = path.name.split(".")[0]
     # Remove yt-dlp [YoutubeID] suffix if present
-    name = re.sub(r"\s\[[a-zA-Z0-9_-]{21}\]$", "", name)
+    name = re.sub(r"\s\[[a-zA-Z0-9_-]{11}\]$", "", name)
     # Truncate to 20 characters
-    if len(name) > 20:
-        name = name[:20]
+    if len(name) > 40:
+        name = name[:40]
     return name.strip()
 
 
