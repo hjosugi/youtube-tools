@@ -12,7 +12,7 @@ from yt_fetcher.models import AppError
 
 def main():
     parser = argparse.ArgumentParser(description="yt-fetch-cli: Download YouTube Subtitles, MP3, and MP4")
-    parser.add_argument("urls", nargs='+', help="YouTube URLs to download")
+    parser.add_argument("urls", nargs='*', help="YouTube URLs to download")
     parser.add_argument("--subtitles", action="store_true", help="Download English subtitles (converted to TSV)")
     parser.add_argument("--mp3", action="store_true", help="Download MP3 audio")
     parser.add_argument("--mp4", action="store_true", help="Download MP4 video")
@@ -20,6 +20,21 @@ def main():
     parser.add_argument("-o", "--output", default=".", help="Output directory (default: current directory)")
 
     args = parser.parse_args()
+
+    # Interactive mode: no URLs given on the command line -> prompt for them,
+    # and default to downloading subtitles (字幕) when no media flag is set.
+    if not args.urls:
+        try:
+            entered = input("Enter YouTube URL(s) (space-separated): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            sys.exit(1)
+        args.urls = entered.split()
+        if not args.urls:
+            print("Error: No URL entered.")
+            sys.exit(1)
+        if not (args.subtitles or args.mp3 or args.mp4):
+            args.subtitles = True
 
     if not (args.subtitles or args.mp3 or args.mp4):
         print("Error: You must specify at least one of --subtitles, --mp3, or --mp4.")

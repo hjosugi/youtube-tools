@@ -24,6 +24,18 @@ Run `./yt-fetch-cli` with an array of URLs and toggle the data you want to retri
 yt-fetch-cli "https://www.youtube.com/watch?v=..." --subtitles --mp3 --mp4 --resolution 1080
 ```
 
+### Interactive mode
+
+Run with **no arguments** and you'll be prompted for the URL(s). When no media flag is given in this mode, subtitles are downloaded by default:
+
+```bash
+$ yt-fetch-cli
+Enter YouTube URL(s) (space-separated): https://www.youtube.com/watch?v=...
+# -> downloads subtitles and saves them as .tsv
+```
+
+You can paste multiple space-separated URLs at the prompt.
+
 ### Options
 
 | Flag | Description |
