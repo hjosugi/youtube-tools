@@ -17,7 +17,21 @@ sudo mv yt-fetch-cli /usr/local/bin/
 
 ## Features & Usage
 
-Run `./yt-fetch-cli` with an array of URLs and toggle the data you want to retrieve. Outputs are perfectly truncated and generated directly in your current directory.
+Run `yt-fetch-cli` with no arguments for guided setup. You can use it without reading `-h` first.
+
+```bash
+yt-fetch-cli
+```
+
+The prompt asks for:
+
+1. YouTube URL(s)
+2. subtitles / MP3 / MP4
+3. MP4 resolution when needed
+4. output directory
+5. final confirmation
+
+You can still pass everything directly when scripting:
 
 ```bash
 # Example: Download Subtitles, MP3 and MP4 in 1080p
@@ -26,12 +40,17 @@ yt-fetch-cli "https://www.youtube.com/watch?v=..." --subtitles --mp3 --mp4 --res
 
 ### Interactive mode
 
-Run with **no arguments** and you'll be prompted for the URL(s). When no media flag is given in this mode, subtitles are downloaded by default:
+Run with **no arguments** or `--interactive` and you'll be guided through the options:
 
 ```bash
 $ yt-fetch-cli
-Enter YouTube URL(s) (space-separated): https://www.youtube.com/watch?v=...
-# -> downloads subtitles and saves them as .tsv
+YouTube Fetcher interactive setup
+YouTube URL(s), separated by spaces: https://www.youtube.com/watch?v=...
+Subtitles as TSV [Y/n]:
+MP3 audio [y/N]: y
+MP4 video [y/N]:
+Output directory [.]: downloads
+Start download [Y/n]:
 ```
 
 You can paste multiple space-separated URLs at the prompt.
@@ -59,7 +78,10 @@ If you're modifying this tool, install [`uv`](https://docs.astral.sh/uv/) and ru
 uv sync
 
 # Run the cli wrapper normally
-uv run python cli.py "https://youtube.com..." --mp3
+uv run python cli.py
+
+# Test the interactive prompt flow without downloading
+uv run python test_interactive.py
 
 # Bump the version automatically (Requires Git clean tree)
 # e.g., bumps package logic string, commits cleanly, sets tag logic natively

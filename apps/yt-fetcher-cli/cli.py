@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import shutil
 
+from yt_fetcher.interactive import PromptCancelled, apply_interactive_options
 from yt_fetcher.youtube import download_media
 from yt_fetcher.parsers import parse_subtitle_file
 from yt_fetcher.writers import write_tsv
@@ -18,23 +19,26 @@ def main():
     parser.add_argument("--mp4", action="store_true", help="Download MP4 video")
     parser.add_argument("--resolution", default="best", choices=["best", "1080", "720", "480", "360"], help="MP4 resolution")
     parser.add_argument("-o", "--output", default=".", help="Output directory (default: current directory)")
+    parser.add_argument("-i", "--interactive", action="store_true", help="Ask for options interactively")
 
     args = parser.parse_args()
 
-    # Interactive mode: no URLs given on the command line -> prompt for them,
-    # and default to downloading subtitles (字幕) when no media flag is set.
-    if not args.urls:
+    needs_interactive = args.interactive or not args.urls or (
+        not (args.subtitles or args.mp3 or args.mp4) and sys.stdin.isatty()
+    )
+    if needs_interactive:
         try:
-            entered = input("Enter YouTube URL(s) (space-separated): ").strip()
+            apply_interactive_options(args)
         except (EOFError, KeyboardInterrupt):
             print()
             sys.exit(1)
-        args.urls = entered.split()
-        if not args.urls:
-            print("Error: No URL entered.")
+        except PromptCancelled:
+            print("Cancelled.")
             sys.exit(1)
-        if not (args.subtitles or args.mp3 or args.mp4):
-            args.subtitles = True
+
+    if args.urls and not (args.subtitles or args.mp3 or args.mp4):
+        print("No output type selected. Defaulting to subtitles. Use --interactive for guided setup.")
+        args.subtitles = True
 
     if not (args.subtitles or args.mp3 or args.mp4):
         print("Error: You must specify at least one of --subtitles, --mp3, or --mp4.")

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from gen_subtitle.interactive import PromptCancelled, apply_interactive_options
 from gen_subtitle.models import CliError
 from gen_subtitle.parsers import parse_subtitle_file
 from gen_subtitle.translators import make_translator, translate_rows
@@ -18,7 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Download YouTube English subtitles and create bilingual TSV / SRT / Markdown files."
     )
-    parser.add_argument("url", help="YouTube URL")
+    parser.add_argument("url", nargs="?", help="YouTube URL")
     parser.add_argument(
         "--translator",
         choices=("argos", "deepl"),
@@ -50,9 +51,25 @@ def parse_args() -> argparse.Namespace:
         "--batch-size",
         type=int,
         default=100,
-        help="Number of rows to process in a single batch. Default: 50",
+        help="Number of rows to process in a single batch. Default: 100",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="Ask for options interactively",
+    )
+    args = parser.parse_args()
+    if args.interactive or not args.url:
+        try:
+            apply_interactive_options(args)
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raise SystemExit(1)
+        except PromptCancelled:
+            print("Cancelled.")
+            raise SystemExit(1)
+    return args
 
 
 def main() -> int:

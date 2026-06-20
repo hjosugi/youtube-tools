@@ -31,10 +31,20 @@ Each app keeps its own `pyproject.toml`, `uv.lock`, README, and commands. Work f
 
 ## Quick Start
 
+Interactive CLI flows are the default way to use the command-line apps.
+
+From the repository root:
+
+```bash
+python3 launcher.py
+```
+
+Choose the tool by number and the launcher starts the guided flow where available.
+
 ```bash
 cd apps/bilingual-subtitle
 uv sync
-uv run python main.py "https://www.youtube.com/watch?v=..."
+uv run python main.py
 ```
 
 ```bash
@@ -46,7 +56,7 @@ uv run python main.py
 ```bash
 cd apps/yt-fetcher-cli
 uv sync
-uv run python cli.py "https://www.youtube.com/watch?v=..." --subtitles
+uv run python cli.py
 ```
 
 ```bash

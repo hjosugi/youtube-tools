@@ -31,10 +31,25 @@ DEEPL_AUTH_KEY=your_deepl_auth_key_here
 
 ## Usage
 
-Run the script by providing the target YouTube URL.
+Run with no arguments for guided setup. You can use it without reading `-h` first.
 
 ```bash
-uv run main.py <YouTube_URL>
+uv run python main.py
+```
+
+The prompt asks for:
+
+1. YouTube URL
+2. translation mode: Argos, English only, or DeepL
+3. output directory
+4. output base name
+5. batch size
+6. final confirmation
+
+You can still pass everything directly when scripting:
+
+```bash
+uv run python main.py <YouTube_URL> --translator argos
 ```
 
 ### Command Line Options
@@ -42,8 +57,9 @@ uv run main.py <YouTube_URL>
 ```
 usage: main.py [-h] [--translator {argos,deepl}]
                [--deepl-auth-key DEEPL_AUTH_KEY] [--out-dir OUT_DIR]
-               [-n OUTPUT_NAME] [--batch-size BATCH_SIZE]
-               url
+               [-n OUTPUT_NAME] [--en-only] [--batch-size BATCH_SIZE]
+               [-i]
+               [url]
 
 positional arguments:
   url                   YouTube URL
@@ -57,8 +73,10 @@ options:
   --out-dir OUT_DIR     Output directory. Default: out
   -n, --output-name OUTPUT_NAME
                         Base name for the output files. If not specified, it is automatically determined from the video ID.
+  --en-only             Skip translation and output English only.
   --batch-size BATCH_SIZE
-                        Number of translations to batch together. Default: 50
+                        Number of translations to batch together. Default: 100
+  -i, --interactive     Ask for options interactively
 ```
 
 ### Example Execution
@@ -70,3 +88,9 @@ By default, the script downloads English subtitles for the provided YouTube URL,
 3. **`.md`**: Formatted Markdown file containing side-by-side translations for language study.
 
 (After successful completion, the original subtitle file downloaded by `yt-dlp` is automatically deleted.)
+
+### Development Check
+
+```bash
+uv run python test_interactive.py
+```
