@@ -7,12 +7,14 @@ This repo consolidates:
 - `hjosugi/youtube-bilingual-subtitle`
 - `hjosugi/yt-fetcher`
 - `hjosugi/yt-fetcher-cli`
+- `hjosugi/simple-youtube-downloader`
 
 The original programs are intentionally kept as separate apps:
 
 - `youtube-bilingual-subtitle` becomes `apps/bilingual-subtitle`
 - `yt-fetcher` becomes `apps/yt-fetcher-web`
 - `yt-fetcher-cli` becomes `apps/yt-fetcher-cli`
+- `simple-youtube-downloader` becomes `apps/simple-youtube-downloader`
 
 ## Why
 
@@ -33,4 +35,3 @@ The original programs are intentionally kept as separate apps:
 2. Add `.env.example` for translation providers if DeepL stays supported.
 3. Review dependency baselines app by app.
 4. Add GitHub Actions after the commands are stable.
-
