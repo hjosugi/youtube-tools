@@ -2,7 +2,7 @@
 
 Small YouTube utility apps kept together as one learning and maintenance repo.
 
-Last verified: 2026-06-20
+Last verified: 2026-06-21
 
 ## Apps
 
@@ -28,6 +28,14 @@ docs/
 ```
 
 Each app keeps its own `pyproject.toml`, `uv.lock`, README, and commands. Work from the app directory unless a root-level task says otherwise.
+
+For code-reading hands-on work, start with these package guides:
+
+| Package | Guide |
+| --- | --- |
+| bilingual subtitle internals | [`apps/bilingual-subtitle/gen_subtitle/README.md`](apps/bilingual-subtitle/gen_subtitle/README.md) |
+| CLI fetcher internals | [`apps/yt-fetcher-cli/yt_fetcher/README.md`](apps/yt-fetcher-cli/yt_fetcher/README.md) |
+| web fetcher internals | [`apps/yt-fetcher-web/yt_fetcher/README.md`](apps/yt-fetcher-web/yt_fetcher/README.md) |
 
 ## Quick Start
 
