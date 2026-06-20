@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YT Fetcher</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <main class="container">
+        <header>
+            <h1>YT Fetcher</h1>
+            <p>Download Subtitles, MP3, and MP4 from YouTube.</p>
+        </header>
+
+        <form id="download-form">
+            <div class="input-group">
+                <label for="urls">YouTube URLs (one per line)</label>
+                <textarea id="urls" name="urls" rows="6" placeholder="https://youtube.com/watch?v=..." required></textarea>
+            </div>
+
+            <div class="checkbox-group">
+                <label class="custom-checkbox">
+                    <input type="checkbox" name="subtitles" id="subtitles">
+                    <span class="checkmark"></span>
+                    Subtitles (EN)
+                </label>
+                <label class="custom-checkbox">
+                    <input type="checkbox" name="mp3" id="mp3">
+                    <span class="checkmark"></span>
+                    MP3 Audio
+                </label>
+                <label class="custom-checkbox">
+                    <input type="checkbox" name="mp4" id="mp4">
+                    <span class="checkmark"></span>
+                    MP4 Video
+                </label>
+            </div>
+            
+            <div class="resolution-group" id="resolution-group" style="display: none; margin-bottom: 24px; animation: fadeUp 0.3s ease-out;">
+                <label for="resolution">MP4 Resolution</label>
+                <select name="resolution" id="resolution" class="custom-select">
+                    <option value="best">Best Available (Auto)</option>
+                    <option value="1080">1080p</option>
+                    <option value="720">720p</option>
+                    <option value="480">480p</option>
+                    <option value="360">360p</option>
+                </select>
+            </div>
+
+            <button type="submit" id="submit-btn" class="glow-on-hover" disabled>
+                <span class="btn-text">Download</span>
+                <div class="loader" id="loader"></div>
+            </button>
+            <div id="error-message" class="error-hidden"></div>
+        </form>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
