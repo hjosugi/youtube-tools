@@ -88,3 +88,7 @@ streamlit run src/main.py
 - Prefer small documented commands over a clever root orchestrator.
 - Update app READMEs when command behavior changes.
 - Modernize `apps/simple-youtube-downloader` before treating it as a maintained app.
+
+## License
+
+0BSD. You can use, copy, modify, and distribute this project for almost any purpose.

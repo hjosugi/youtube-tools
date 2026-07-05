@@ -1,4 +1,5 @@
 [project]
+license = "0BSD"
 name = "yt-fetcher"
 version = "0.2.0"
 description = "Add your description here"
