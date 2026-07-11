@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # yt_fetcher Web Package
 
 FastAPI package used by the browser-based YouTube fetcher.

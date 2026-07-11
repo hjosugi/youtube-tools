@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # yt-fetch-cli
 
 `yt-fetch-cli` is a blazing-fast, strictly native, zero-environment standalone CLI tool for downloading YouTube subtitles, high-quality audio (MP3), and video (MP4) seamlessly.
