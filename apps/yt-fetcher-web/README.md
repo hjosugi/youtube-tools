@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # YT Fetcher
 
 YT Fetcher is a simple, modern FastAPI web application to download YouTube English subtitles (as TSV), MP3 audio, and MP4 video formats seamlessly.

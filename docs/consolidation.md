@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](consolidation.md) | [日本語](consolidation.ja.md)
+
 # Consolidation Notes
 
 Date: 2026-06-20

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # yt_fetcher CLI Package
 
 Core Python package used by the standalone `yt-fetch-cli` app.

@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # gen_subtitle Package
 
 Python package behind the bilingual subtitle hands-on app.

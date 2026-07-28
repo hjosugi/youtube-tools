@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # YouTube Tools
 
 Small YouTube utility apps kept together as one learning and maintenance repo.

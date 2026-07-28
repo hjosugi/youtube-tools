@@ -1,3 +1,6 @@
+<!-- i18n: language-switcher -->
+[English](README.md) | [日本語](README.ja.md)
+
 # gen-subtitle
 
 A script to download English subtitles from YouTube and generate bilingual (English-Japanese) TSV, SRT, and Markdown files.
