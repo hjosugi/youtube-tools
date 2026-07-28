@@ -9,7 +9,7 @@
 
 ## インストール
 
-[GitHub Releases](../../releases)ページに移動し、Linux用の`yt-fetch-cli`をダウンロードします。
+[GitHub Releases](https://github.com/hjosugi/youtube-tools/releases)ページに移動し、Linux用の`yt-fetch-cli`をダウンロードします。
 
 実行可能にして、PATHに移動します：
 ```bash

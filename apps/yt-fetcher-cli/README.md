@@ -9,7 +9,7 @@ It bundles the incredible `yt-dlp` engine internally via `PyInstaller`, meaning 
 
 ## Installation
 
-Go to the [GitHub Releases](../../releases) page and download `yt-fetch-cli` for Linux.
+Go to the [GitHub Releases](https://github.com/hjosugi/youtube-tools/releases) page and download `yt-fetch-cli` for Linux.
 
 Make it executable and move it to your PATH:
 ```bash
