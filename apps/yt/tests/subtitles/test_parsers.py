@@ -1,7 +1,7 @@
 import pytest
 
 from ytcli.models import AppError
-from ytcli.parsers import parse_subtitle_file
+from ytcli.subtitles.parsers import dedupe, parse_subtitle_file
 
 SRT = """1
 00:00:01,000 --> 00:00:02,000
@@ -46,6 +46,19 @@ def test_parse_vtt_strips_tags_and_cue_settings(tmp_path):
     assert cues[1].start == "00:00:02.500"
 
 
+def test_a_bom_does_not_break_parsing(tmp_path):
+    path = tmp_path / "a.srt"
+    path.write_text(SRT, encoding="utf-8-sig")
+    assert parse_subtitle_file(path)
+
+
+def test_dedupe_is_idempotent(tmp_path):
+    path = tmp_path / "a.srt"
+    path.write_text(SRT, encoding="utf-8")
+    cues = parse_subtitle_file(path)
+    assert dedupe(cues) == cues
+
+
 def test_unknown_extension_raises(tmp_path):
     path = tmp_path / "a.ass"
     path.write_text("x", encoding="utf-8")
@@ -53,8 +66,9 @@ def test_unknown_extension_raises(tmp_path):
         parse_subtitle_file(path)
 
 
-def test_empty_subtitle_raises(tmp_path):
-    path = tmp_path / "a.srt"
-    path.write_text("\n", encoding="utf-8")
+@pytest.mark.parametrize("content", ["\n", "WEBVTT\n\n", "1\n\n"])
+def test_subtitle_without_readable_cues_raises(tmp_path, content):
+    path = tmp_path / ("a.vtt" if content.startswith("WEBVTT") else "a.srt")
+    path.write_text(content, encoding="utf-8")
     with pytest.raises(AppError):
         parse_subtitle_file(path)

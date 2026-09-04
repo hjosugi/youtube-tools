@@ -37,8 +37,7 @@ def fetch_subtitles(job: Job) -> None:
             "skip_download": True,
             "writesubtitles": True,
             # Only ask for auto-captions when a resolved code is not a human-written track.
-            "writeautomaticsub": options.auto_subs
-            and any(code not in tracks.manual for code in codes),
+            "writeautomaticsub": options.auto_subs and any(code not in tracks.manual for code in codes),
             "subtitleslangs": codes,
             "subtitlesformat": "srt/vtt/best",
         }

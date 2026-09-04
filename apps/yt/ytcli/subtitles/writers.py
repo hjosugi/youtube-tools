@@ -7,6 +7,7 @@ from pathlib import Path
 from ..models import SubtitleCue
 from ..utils import srt_timestamp
 
+
 def write_srt(cues: list[SubtitleCue], path: Path) -> None:
     with path.open("w", encoding="utf-8", newline="\n") as handle:
         for index, cue in enumerate(cues, start=1):

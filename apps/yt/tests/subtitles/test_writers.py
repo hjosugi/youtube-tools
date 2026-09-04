@@ -1,5 +1,7 @@
+import pytest
+
 from ytcli.models import SubtitleCue
-from ytcli.writers import SUBTITLE_FORMATS, SUBTITLE_WRITERS
+from ytcli.subtitles import SUBTITLE_FORMATS, SUBTITLE_WRITERS
 
 CUES = [
     SubtitleCue("00:00:01.000", "00:00:02.000", "Hello"),
@@ -7,16 +9,33 @@ CUES = [
 ]
 
 
-def test_every_declared_format_has_a_writer():
-    assert set(SUBTITLE_FORMATS) == set(SUBTITLE_WRITERS)
+def test_the_format_list_is_derived_from_the_writers():
+    assert SUBTITLE_FORMATS == tuple(SUBTITLE_WRITERS)
+
+
+@pytest.mark.parametrize("fmt", SUBTITLE_FORMATS)
+def test_every_writer_produces_a_non_empty_file(tmp_path, fmt):
+    path = tmp_path / f"a.{fmt}"
+    SUBTITLE_WRITERS[fmt](CUES, path)
+    text = path.read_text(encoding="utf-8")
+    assert "Hello" in text and "World" in text
+
+
+@pytest.mark.parametrize("fmt", SUBTITLE_FORMATS)
+def test_writing_twice_gives_the_same_file(tmp_path, fmt):
+    first, second = tmp_path / "one" / f"a.{fmt}", tmp_path / "two" / f"a.{fmt}"
+    for path in (first, second):
+        path.parent.mkdir()
+        SUBTITLE_WRITERS[fmt](CUES, path)
+    assert first.read_bytes() == second.read_bytes()
 
 
 def test_srt_uses_comma_milliseconds(tmp_path):
     path = tmp_path / "a.srt"
     SUBTITLE_WRITERS["srt"](CUES, path)
     text = path.read_text(encoding="utf-8")
-    assert "00:00:01,000 --> 00:00:02,000" in text
     assert text.startswith("1\n")
+    assert "00:00:01,000 --> 00:00:02,000" in text
 
 
 def test_vtt_has_header(tmp_path):
@@ -39,8 +58,8 @@ def test_txt_is_text_only(tmp_path):
     assert path.read_text(encoding="utf-8") == "Hello\nWorld\n"
 
 
-def test_md_has_sections(tmp_path):
+def test_md_has_numbered_sections(tmp_path):
     path = tmp_path / "a.md"
     SUBTITLE_WRITERS["md"](CUES, path)
     text = path.read_text(encoding="utf-8")
-    assert "## 1" in text and "Hello" in text
+    assert "## 1" in text and "## 2" in text

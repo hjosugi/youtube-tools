@@ -4,14 +4,14 @@ version = "1.0.0"
 description = "One cross-platform CLI and GUI for YouTube audio, video and subtitles"
 readme = "README.md"
 license = "0BSD"
-requires-python = ">=3.11,<3.15"
+requires-python = ">=3.11,<3.16"
 dependencies = [
     "yt-dlp>=2026.8.19",
     "certifi>=2026.7.22",
 ]
 
 [project.scripts]
-yt = "ytcli.cli:main"
+yt = "ytcli.ui.cli:main"
 
 [build-system]
 requires = ["hatchling>=1.32.0"]

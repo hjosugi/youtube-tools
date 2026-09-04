@@ -12,7 +12,7 @@ from ..models import (
     AppError,
 )
 from ..modes import parse_modes
-from ..subtitles.writers import SUBTITLE_FORMATS
+from ..subtitles import SUBTITLE_FORMATS
 from ..utils import split_list
 from .storage import load_config
 
@@ -89,8 +89,7 @@ def validate_sub_formats(formats: tuple[str, ...]) -> tuple[str, ...]:
     unknown = [item for item in formats if item not in SUBTITLE_FORMATS]
     if unknown:
         raise AppError(
-            f"Unknown subtitle format(s): {', '.join(unknown)}. "
-            f"Choose from: {', '.join(SUBTITLE_FORMATS)}"
+            f"Unknown subtitle format(s): {', '.join(unknown)}. Choose from: {', '.join(SUBTITLE_FORMATS)}"
         )
     return formats
 

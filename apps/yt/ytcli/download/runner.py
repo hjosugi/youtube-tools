@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 
 from ..models import AppError, DownloadResult
@@ -10,7 +12,11 @@ from .job import Job
 from .stages import fetch_media, fetch_subtitles
 
 # Subtitles first: they are cheap, so a later media failure still leaves something useful.
-STAGE_ORDER = (("s", "subtitle"), ("a", "audio"), ("v", "video"))
+STAGES: tuple[tuple[str, Callable[[Job], None]], ...] = (
+    ("s", fetch_subtitles),
+    ("a", partial(fetch_media, kind="audio")),
+    ("v", partial(fetch_media, kind="video")),
+)
 
 
 def download(
@@ -29,14 +35,11 @@ def download(
 
     with tempfile.TemporaryDirectory(prefix="yt-") as staging:
         job = Job(options, url, Path(staging), result, log, cancelled)
-        for letter, kind in STAGE_ORDER:
+        for letter, fetch in STAGES:
             if letter not in options.modes:
                 continue
             job.check_cancelled()
-            if kind == "subtitle":
-                fetch_subtitles(job)
-            else:
-                fetch_media(job, kind)
+            fetch(job)
 
     if not result.files:
         raise AppError(

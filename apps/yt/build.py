@@ -1,7 +1,7 @@
 """Build the standalone `yt` binary for the platform this script runs on.
 
-    uv run python build.py            # -> dist/yt-<os>-<arch>[.exe]
-    uv run python build.py --keep     # keep the plain dist/yt name as well
+uv run python build.py            # -> dist/yt-<os>-<arch>[.exe]
+uv run python build.py --keep     # keep the plain dist/yt name as well
 """
 
 from __future__ import annotations

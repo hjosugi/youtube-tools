@@ -2,7 +2,7 @@
 
 import sys
 
-from ytcli.cli import main
+from ytcli.ui.cli import main
 
 if __name__ == "__main__":
     sys.exit(main())

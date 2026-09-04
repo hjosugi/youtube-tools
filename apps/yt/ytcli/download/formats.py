@@ -10,12 +10,7 @@ def build_video_format(quality: str, container: str) -> str:
     if quality == "best":
         return f"bestvideo{video_ext}+bestaudio{audio_ext}/bestvideo+bestaudio/best"
     height = f"[height<={quality}]"
-    return (
-        f"bestvideo{height}{video_ext}+bestaudio{audio_ext}"
-        f"/bestvideo{height}+bestaudio"
-        f"/best{height}"
-        "/best"
-    )
+    return f"bestvideo{height}{video_ext}+bestaudio{audio_ext}/bestvideo{height}+bestaudio/best{height}/best"
 
 
 def build_audio_quality(quality: str) -> str:
