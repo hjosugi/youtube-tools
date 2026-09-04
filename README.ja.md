@@ -1,97 +1,67 @@
 <!-- i18n: language-switcher -->
 [English](README.md) | [日本語](README.ja.md)
 
-# YouTubeツール
+# YouTube Tools
 
-小さなYouTubeユーティリティアプリを一つの学習およびメンテナンスリポジトリにまとめています。
+YouTube の音声・動画・字幕を1つで扱うクロスプラットフォームツールです。
 
-最終確認日: 2026-06-21
+最終確認日: 2026-09-04
 
-## アプリ
+## ツール
 
-| アプリ | パス | 目的 | 実行環境 |
+| アプリ | パス | 用途 | 実行環境 |
 | --- | --- | --- | --- |
-| バイリンガル字幕ジェネレーター | `apps/bilingual-subtitle` | 英語のYouTube字幕をダウンロードし、バイリンガルの英語/日本語TSV、SRT、Markdownファイルを生成 | Python + uv |
-| YTフェッチャーウェブ | `apps/yt-fetcher-web` | バッチ字幕、MP3、MP4ダウンロード用のFastAPIウェブUI | Python + uv + FastAPI |
-| YTフェッチャーCLI | `apps/yt-fetcher-cli` | 字幕、MP3、MP4ダウンロード用のスタンドアロンCLI | Python + uv + PyInstaller |
-| シンプルYouTubeダウンローダー | `apps/simple-youtube-downloader` | 参照と近代化のために保持されている古いStreamlitダウンローダー実験 | Python + Streamlit |
+| `yt` | `apps/yt` | 音声・動画・字幕をダウンロードする CLI とデスクトップ GUI | Python + uv、または単体バイナリ |
 
-これらのアプリは一つのプログラムになる必要はありません。このリポジトリは、同じ問題領域、メンテナンスの懸念、および安全に関する注意事項を共有しているため、グループ化されています。
-
-## リポジトリのレイアウト
-
-```text
-apps/
-  bilingual-subtitle/
-  simple-youtube-downloader/
-  yt-fetcher-web/
-  yt-fetcher-cli/
-docs/
-  consolidation.md
-```
-
-各アプリは独自の `pyproject.toml`、`uv.lock`、README、およびコマンドを保持しています。ルートレベルのタスクが別に指示しない限り、アプリディレクトリから作業してください。
-
-コードリーディングの実践的な作業を始めるには、これらのパッケージガイドを参照してください：
-
-| パッケージ | ガイド |
-| --- | --- |
-| バイリンガル字幕内部 | [`apps/bilingual-subtitle/gen_subtitle/README.md`](apps/bilingual-subtitle/gen_subtitle/README.md) |
-| CLIフェッチャー内部 | [`apps/yt-fetcher-cli/yt_fetcher/README.md`](apps/yt-fetcher-cli/yt_fetcher/README.md) |
-| ウェブフェッチャー内部 | [`apps/yt-fetcher-web/yt_fetcher/README.md`](apps/yt-fetcher-web/yt_fetcher/README.md) |
+機能は1つのコマンドにまとまっています。詳細は `apps/yt/README.ja.md` を参照してください。
 
 ## クイックスタート
 
-インタラクティブCLIフローは、コマンドラインアプリを使用するためのデフォルトの方法です。
-
-リポジトリのルートから：
+[Releases](https://github.com/hjosugi/youtube-tools/releases) から使用中の環境向けバイナリを取得すれば Python は不要です。ソースから動かす場合は次のとおりです。
 
 ```bash
-python3 launcher.py
-```
-
-番号でツールを選択すると、利用可能な場合はガイド付きフローが開始されます。
-
-```bash
-cd apps/bilingual-subtitle
+cd apps/yt
 uv sync
-uv run python main.py
+uv run yt --help
 ```
 
 ```bash
-cd apps/yt-fetcher-web
-uv sync
-uv run python main.py
+yt URL                     # 英語字幕を .srt と .tsv で
+yt URL -m avs              # 音声・動画・字幕を1回で
+yt URL -m s -l en,ja       # 英語と日本語の字幕
+yt URL -m v --vq 1080      # 動画を 1080p までに制限
+yt URL -m a --aq 192       # 音声を 192 kbps で
+yt --gui                   # GUI を開く
+yt -i                      # ターミナルの対話モード
+yt -o ~/Downloads --save-config   # 保存先を既定値として記憶
 ```
 
-```bash
-cd apps/yt-fetcher-cli
-uv sync
-uv run python cli.py
+音声の抽出と、映像・音声ストリームの結合には `ffmpeg` が必要です。`PATH` に入れておいてください。
+
+## リポジトリ構成
+
+```text
+apps/
+  yt/            本体: CLI・GUI・テスト・ビルドスクリプト・シェル補完
+docs/
+  consolidation.ja.md
+.github/workflows/
+  ci.yml         Linux / macOS / Windows で lint とテスト
+  release.yml    v* タグで各プラットフォーム向けの単体バイナリを作成
 ```
 
-```bash
-cd apps/simple-youtube-downloader
-pip install -r requirements.txt
-streamlit run src/main.py
-```
+## これまでの経緯
 
-## 安全性と範囲
+もとは4つの別々の YouTube ユーティリティでした。現在は1つのツールに統合しています。
+統合の内容と削除したものは [`docs/consolidation.ja.md`](docs/consolidation.ja.md) を参照してください。
 
-- アクセスおよび処理が許可されているコンテンツのみにこれらのツールを使用してください。
-- YouTubeの利用規約、著作権、レート制限、およびクリエイターの許可を尊重してください。
-- ダウンロードしたメディア、字幕、APIキー、クッキー、またはブラウザプロファイルをコミットしないでください。
-- MP3/MP4の抽出は `ffmpeg` に依存します。
-- DeepL翻訳を使用する場合、DeepL翻訳者パスで `DEEPL_AUTH_KEY` が必要です。
+## 安全性と利用範囲
 
-## メンテナンスノート
-
-- コードを共有する前に、各アプリが単独で実行可能であることを確認してください。
-- 共通コードが意味を持つようになった場合、テストがある後に `packages/` に移動してください。
-- 巧妙なルートオーケストレーターよりも、小さな文書化されたコマンドを優先してください。
-- コマンドの動作が変更された場合は、アプリのREADMEを更新してください。
-- `apps/simple-youtube-downloader` をメンテナンスされたアプリとして扱う前に近代化してください。
+- アクセスと処理が許可されているコンテンツにのみ使用してください。
+- YouTube の利用規約・著作権・レート制限・投稿者の許諾を尊重してください。
+- ダウンロードしたメディア・字幕・API キー・Cookie・ブラウザプロファイルはコミットしないでください。
+- MP3 / MP4 の抽出には `ffmpeg` が必要です。
 
 ## ライセンス
 
-0BSD。ほぼすべての目的でこのプロジェクトを使用、コピー、変更、配布できます。
+0BSD。ほぼ任意の目的で利用・複製・改変・配布できます。

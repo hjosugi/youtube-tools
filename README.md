@@ -3,94 +3,64 @@
 
 # YouTube Tools
 
-Small YouTube utility apps kept together as one learning and maintenance repo.
+One cross-platform tool for YouTube audio, video and subtitles.
 
-Last verified: 2026-06-21
+Last verified: 2026-09-04
 
-## Apps
+## The tool
 
 | App | Path | Purpose | Runtime |
 | --- | --- | --- | --- |
-| Bilingual subtitle generator | `apps/bilingual-subtitle` | Download English YouTube subtitles and generate bilingual English/Japanese TSV, SRT, and Markdown files | Python + uv |
-| YT Fetcher web | `apps/yt-fetcher-web` | FastAPI web UI for batch subtitle, MP3, and MP4 downloads | Python + uv + FastAPI |
-| YT Fetcher CLI | `apps/yt-fetcher-cli` | Standalone-oriented CLI for subtitles, MP3, and MP4 downloads | Python + uv + PyInstaller |
-| Simple YouTube downloader | `apps/simple-youtube-downloader` | Older Streamlit downloader experiment kept for reference and modernization | Python + Streamlit |
+| `yt` | `apps/yt` | CLI and desktop GUI for downloading audio, video and subtitles | Python + uv, or a standalone binary |
 
-These apps do not need to become one program. The repo groups them because they share the same problem area, maintenance concerns, and safety notes.
+Everything lives in one command. `apps/yt/README.md` is the full guide.
+
+## Quick Start
+
+Grab a binary for your platform from [Releases](https://github.com/hjosugi/youtube-tools/releases) — no Python needed — or run from source:
+
+```bash
+cd apps/yt
+uv sync
+uv run yt --help
+```
+
+```bash
+yt URL                     # English subtitles as .srt and .tsv
+yt URL -m avs              # audio, video and subtitles in one run
+yt URL -m s -l en,ja       # English and Japanese subtitles
+yt URL -m v --vq 1080      # video capped at 1080p
+yt URL -m a --aq 192       # audio at 192 kbps
+yt --gui                   # desktop window
+yt -i                      # guided terminal setup
+yt -o ~/Downloads --save-config   # remember a download directory
+```
+
+`ffmpeg` must be on your `PATH` for audio extraction and for merging video and audio streams.
 
 ## Repository Layout
 
 ```text
 apps/
-  bilingual-subtitle/
-  simple-youtube-downloader/
-  yt-fetcher-web/
-  yt-fetcher-cli/
+  yt/            the tool: CLI, GUI, tests, build script, shell completions
 docs/
   consolidation.md
+.github/workflows/
+  ci.yml         lint and tests on Linux, macOS and Windows
+  release.yml    standalone binaries for every platform on a v* tag
 ```
 
-Each app keeps its own `pyproject.toml`, `uv.lock`, README, and commands. Work from the app directory unless a root-level task says otherwise.
+## History
 
-For code-reading hands-on work, start with these package guides:
-
-| Package | Guide |
-| --- | --- |
-| bilingual subtitle internals | [`apps/bilingual-subtitle/gen_subtitle/README.md`](apps/bilingual-subtitle/gen_subtitle/README.md) |
-| CLI fetcher internals | [`apps/yt-fetcher-cli/yt_fetcher/README.md`](apps/yt-fetcher-cli/yt_fetcher/README.md) |
-| web fetcher internals | [`apps/yt-fetcher-web/yt_fetcher/README.md`](apps/yt-fetcher-web/yt_fetcher/README.md) |
-
-## Quick Start
-
-Interactive CLI flows are the default way to use the command-line apps.
-
-From the repository root:
-
-```bash
-python3 launcher.py
-```
-
-Choose the tool by number and the launcher starts the guided flow where available.
-
-```bash
-cd apps/bilingual-subtitle
-uv sync
-uv run python main.py
-```
-
-```bash
-cd apps/yt-fetcher-web
-uv sync
-uv run python main.py
-```
-
-```bash
-cd apps/yt-fetcher-cli
-uv sync
-uv run python cli.py
-```
-
-```bash
-cd apps/simple-youtube-downloader
-pip install -r requirements.txt
-streamlit run src/main.py
-```
+This repo started as four separate YouTube utilities. They are now one tool — see
+[`docs/consolidation.md`](docs/consolidation.md) for what merged, what was dropped, and why.
 
 ## Safety And Scope
 
-- Use these tools only for content you are allowed to access and process.
+- Use this only for content you are allowed to access and process.
 - Respect YouTube terms, copyright, rate limits, and creator permissions.
 - Do not commit downloaded media, subtitles, API keys, cookies, or browser profiles.
 - MP3/MP4 extraction depends on `ffmpeg`.
-- DeepL translation requires `DEEPL_AUTH_KEY` when using the DeepL translator path.
-
-## Maintenance Notes
-
-- Keep each app runnable on its own before sharing code.
-- If common code becomes meaningful, move it to `packages/` after there are tests.
-- Prefer small documented commands over a clever root orchestrator.
-- Update app READMEs when command behavior changes.
-- Modernize `apps/simple-youtube-downloader` before treating it as a maintained app.
 
 ## License
 

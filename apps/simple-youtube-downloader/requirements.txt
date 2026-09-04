@@ -1,4 +1,0 @@
-youtube-dl-nightly
-ffmpeg-python
-streamlit
-    

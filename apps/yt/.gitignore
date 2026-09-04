@@ -1,0 +1,16 @@
+dist/
+build/
+*.spec
+downloads/
+out/
+*.mp3
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.opus
+*.flac
+*.wav
+*.srt
+*.vtt
+*.tsv
