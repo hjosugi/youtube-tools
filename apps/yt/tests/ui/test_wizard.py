@@ -57,6 +57,16 @@ def test_retries_on_a_bad_mode():
     assert wizard(["URL", "zzz", "av", "", "", "", "", "", ""]).modes == "av"
 
 
+def test_urls_can_be_comma_separated():
+    options = wizard(["https://youtu.be/abc,https://youtu.be/def", "s", "", "", "", ""])
+    assert options.urls == ["https://youtu.be/abc", "https://youtu.be/def"]
+
+
+def test_urls_can_mix_commas_and_spaces_and_lose_repeats():
+    options = wizard(["a, b  c ,a", "s", "", "", "", ""])
+    assert options.urls == ["a", "b", "c"]
+
+
 def test_keeps_urls_that_were_already_given():
     options = wizard(["s", "", "", "", ""], Options(urls=["already"]))
     assert options.urls == ["already"]
