@@ -71,7 +71,9 @@ def test_empty_format_list_falls_back_to_srt():
 
 
 def test_out_dir_expands_user(monkeypatch, tmp_path):
+    # Path.expanduser reads HOME on POSIX and USERPROFILE on Windows.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     assert Options(output="~/dl").out_dir == tmp_path / "dl"
 
 
