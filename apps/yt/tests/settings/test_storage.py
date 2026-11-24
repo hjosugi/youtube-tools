@@ -83,9 +83,8 @@ def test_config_path_per_platform(monkeypatch, platform, env, expected_parts):
         monkeypatch.delenv(key, raising=False)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
-    path = storage.config_path()
-    for part in expected_parts:
-        assert part in str(path)
+    # as_posix() so the expected "/"-separated tail also matches a Windows path.
+    assert "/".join(expected_parts) in storage.config_path().as_posix()
 
 
 def test_env_override_wins_over_the_platform_path(monkeypatch, tmp_path):
