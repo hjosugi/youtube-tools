@@ -306,9 +306,17 @@ class TestBadRequests:
     def test_json_that_is_not_an_object(self, ui):
         assert ui.post("/api/info", ["x"]) == (400, {"error": "Request must be a JSON object."})
 
-    def test_an_oversized_body(self, ui):
-        status, answer = ui.post("/api/info", {"url": "x" * (server_module.MAX_BODY + 1)})
-        assert (status, answer) == (400, {"error": "Request too large."})
+    def test_an_oversized_body_is_refused_unread(self, ui, manager):
+        try:
+            status, answer = ui.post("/api/info", {"url": "x" * (server_module.MAX_BODY + 1)})
+        except OSError:
+            # The server answers and hangs up without reading the body. Depending on the
+            # platform the client sees that answer, or a reset while it is still sending.
+            pass
+        else:
+            assert (status, answer) == (400, {"error": "Request too large."})
+        assert manager._info == {}  # either way nothing was looked up
+        assert ui.get("/api/ping")[0] == 200
 
     def test_a_handler_bug_does_not_kill_the_server(self, ui, monkeypatch):
         def boom(_path):
