@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>yt</title>
+  <link rel="icon" href="/assets/icon.svg">
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <h1><img src="/assets/icon.svg" alt="" width="26" height="26">yt <small id="version"></small></h1>
+    <nav>
+      <button id="lang" class="ghost" type="button"></button>
+      <button id="quit" class="ghost" type="button" data-t="quit"></button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="card">
+      <div class="url-row">
+        <textarea id="urls" rows="1" autofocus spellcheck="false" autocomplete="off"
+                  data-t-placeholder="urlPlaceholder" data-t-label="urlLabel"></textarea>
+        <button id="paste" class="ghost" type="button" data-t="paste"></button>
+      </div>
+
+      <div id="preview" class="preview" hidden>
+        <img id="thumb" alt="" width="160" height="90">
+        <div>
+          <strong id="title"></strong>
+          <span id="meta" class="muted"></span>
+          <span id="tracks" class="muted"></span>
+        </div>
+      </div>
+      <p id="hint" class="hint" role="status"></p>
+
+      <div class="actions">
+        <button class="action" type="button" data-mode="s">
+          <span class="big" data-t="subs"></span><span class="small" id="detail-s"></span>
+        </button>
+        <button class="action" type="button" data-mode="a">
+          <span class="big" id="label-a"></span><span class="small" id="detail-a"></span>
+        </button>
+        <button class="action" type="button" data-mode="v">
+          <span class="big" id="label-v"></span><span class="small" id="detail-v"></span>
+        </button>
+        <button class="action" type="button" data-mode="avs">
+          <span class="big" data-t="all"></span><span class="small" data-t="allDetail"></span>
+        </button>
+      </div>
+      <p id="enterHint" class="muted center"></p>
+
+      <div class="folder-row">
+        <span class="muted" data-t="saveTo"></span>
+        <button id="folder" class="link path" type="button" data-t-title="change"></button>
+        <button id="changeFolder" class="ghost" type="button" data-t="change"></button>
+        <button id="openFolder" class="ghost" type="button" data-t="open"></button>
+      </div>
+      <p id="ffmpegNote" class="muted" hidden></p>
+
+      <details id="settings" class="settings">
+        <summary data-t="settings"></summary>
+        <div class="grid">
+          <label for="set-langs" data-t="sLangs"></label>
+          <div>
+            <input id="set-langs" type="text" data-key="sub_langs" spellcheck="false" autocomplete="off">
+            <div id="langChips" class="chips"></div>
+            <small class="muted" data-t="sLangsHelp"></small>
+          </div>
+
+          <span data-t="sFormats"></span>
+          <div id="set-formats" class="checks"></div>
+
+          <span></span>
+          <label class="check"><input id="set-auto" type="checkbox" data-key="auto_subs"><span data-t="autoSubs"></span></label>
+
+          <label for="set-vq" data-t="vQuality"></label>
+          <div class="pair">
+            <select id="set-vq" data-key="video_quality"></select>
+            <select id="set-vf" data-key="video_format" data-t-label="vFormat"></select>
+          </div>
+
+          <label for="set-aq" data-t="aQuality"></label>
+          <div class="pair">
+            <select id="set-aq" data-key="audio_quality"></select>
+            <select id="set-af" data-key="audio_format" data-t-label="aFormat"></select>
+          </div>
+        </div>
+        <small class="muted" data-t="autoSaved"></small>
+      </details>
+    </section>
+
+    <section id="downloads" hidden>
+      <header class="section-head">
+        <h2 data-t="downloads"></h2>
+        <button id="clear" class="ghost" type="button" data-t="clear"></button>
+      </header>
+      <ul id="jobs" class="jobs"></ul>
+    </section>
+  </main>
+
+  <dialog id="folderDialog">
+    <form method="dialog">
+      <h2 data-t="chooseFolder"></h2>
+      <input id="folderPath" type="text" spellcheck="false" autocomplete="off" data-t-label="chooseFolder">
+      <div id="folderShortcuts" class="chips"></div>
+      <ul id="folderList" class="folders"></ul>
+      <p id="folderError" class="error"></p>
+      <div class="dialog-buttons">
+        <button class="ghost" value="cancel" data-t="cancel"></button>
+        <button id="folderUse" class="primary" value="use" data-t="useThis"></button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="gone" class="gone" hidden>
+    <div class="card">
+      <p id="goneText"></p>
+    </div>
+  </div>
+
+  <template id="jobTemplate">
+    <li class="job">
+      <img class="jthumb" alt="" width="120" height="68">
+      <div class="jmain">
+        <div class="jhead"><span class="jtitle"></span><span class="badges"></span></div>
+        <div class="jstatus"><progress max="100"></progress><span class="jtext"></span></div>
+        <ul class="jfiles"></ul>
+        <p class="jnote"></p>
+        <details class="jmore">
+          <summary data-t="details"></summary>
+          <p class="muted" data-t="command"></p>
+          <code class="cmd"></code>
+          <pre class="log"></pre>
+        </details>
+      </div>
+      <div class="jbuttons">
+        <button class="ghost cancel" type="button" data-t="stop"></button>
+        <button class="ghost show" type="button" data-t="showFolder"></button>
+      </div>
+    </li>
+  </template>
+</body>
+</html>

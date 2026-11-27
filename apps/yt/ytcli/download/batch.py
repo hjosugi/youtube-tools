@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from ..models import AppError, DownloadCancelled
 from ..settings import Options
-from .client import Cancelled, Logger
+from .client import Cancelled, Logger, expand_playlist
 from .runner import download
 
 
@@ -32,7 +32,7 @@ def download_all(
     report_error = report_error or log
     report = BatchReport()
 
-    for url in options.urls:
+    for url in expand_all(options, log, report_error):
         if cancelled is not None and cancelled():
             report.cancelled = True
             break
@@ -55,3 +55,18 @@ def download_all(
             log(f"note: {warning}")
 
     return report
+
+
+def expand_all(options: Options, log: Logger, report_error: Logger) -> list[str]:
+    """The video URLs to work through, with every playlist replaced by its videos."""
+    urls: list[str] = []
+    for url in options.urls:
+        try:
+            videos = expand_playlist(url, insecure=options.insecure)
+        except AppError as error:
+            report_error(f"error ({url}): {error}")
+            videos = [url]  # let the download itself report what is wrong with it
+        if len(videos) > 1:
+            log(f"Playlist with {len(videos)} videos: {url}")
+        urls.extend(videos)
+    return urls

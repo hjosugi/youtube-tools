@@ -1,0 +1,32 @@
+# Dependency updates are fully automatic:
+#   Dependabot opens a pull request -> CI runs -> the `dependabot` job in ci.yml merges it
+#   when everything is green -> if a dependency that ships inside the binary changed,
+#   the same job cuts a patch release.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /apps/yt
+    schedule:
+      interval: daily
+    groups:
+      python:
+        patterns: ["*"]
+    cooldown:
+      # Give a bad release three days to be noticed before it is merged unattended...
+      default-days: 3
+      # ...except yt-dlp: when YouTube changes something, its fix is what we are waiting for.
+      exclude:
+        - yt-dlp
+        - yt-dlp-ejs
+    commit-message:
+      prefix: deps
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci

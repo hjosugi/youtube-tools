@@ -17,6 +17,8 @@ from ytcli.modes import ALL_MODES, MODE_LETTERS, MODE_NAMES, describe_modes, par
         ("sub", "s"),
         ("subtitles", "s"),
         ("mp3,mp4", "av"),
+        ("mp3,all", "avs"),
+        ("s,all", "avs"),
         ("a+v", "av"),
         ("AVS", "avs"),
         ("aa", "a"),

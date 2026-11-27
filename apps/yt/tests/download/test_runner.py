@@ -2,9 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from ytcli.download import download
-from ytcli.models import AppError, DownloadCancelled, SubtitleTracks
+from ytcli.download import download, stages
+from ytcli.download.job import Job
+from ytcli.models import AppError, DownloadCancelled, DownloadResult, SubtitleTracks
 from ytcli.settings import Options
+
+# Taken before the `fake` fixture swaps it for a stub.
+real_prepare_ffmpeg = stages.prepare_ffmpeg
 
 SRT = "1\n00:00:01,000 --> 00:00:02,000\nHello\n\n2\n00:00:02,000 --> 00:00:03,000\nWorld\n"
 
@@ -194,3 +198,94 @@ def test_quality_choices_reach_yt_dlp(tmp_path, fake):
     postprocessor = fake.options_for("audio")["postprocessors"][0]
     assert postprocessor["preferredcodec"] == "opus"
     assert postprocessor["preferredquality"] == "192"
+
+
+def test_a_ui_can_follow_every_step(tmp_path, fake):
+    fake.produce = {"subs": [SUB_FILE], "audio": [AUDIO_FILE]}
+    events: list[tuple[str, dict]] = []
+    download(
+        options(tmp_path, modes="as", sub_formats=("srt",)),
+        "URL",
+        log=lambda _line: None,
+        notify=lambda kind, details: events.append((kind, details)),
+    )
+    assert events == [
+        ("stage", {"stage": "subtitle"}),
+        ("saved", {"path": str(tmp_path / "Clip.en.srt")}),
+        ("stage", {"stage": "audio"}),
+        ("saved", {"path": str(tmp_path / "Clip.mp3")}),
+    ]
+
+
+def test_a_warning_is_also_sent_as_an_event(tmp_path, fake):
+    fake.produce = {"video": [VIDEO_FILE]}
+    fake.fail = {"audio"}
+    events: list[tuple[str, dict]] = []
+    download(
+        options(tmp_path, modes="av"), "URL", lambda _line: None, None, lambda *event: events.append(event)
+    )
+    assert ("warning", {"message": "audio download failed: audio boom"}) in events
+
+
+def test_mp4_asks_for_h264_so_the_file_plays_everywhere(tmp_path, fake):
+    fake.produce = {"video": [VIDEO_FILE]}
+    download(options(tmp_path, modes="v"), "URL", log=lambda _line: None)
+    assert fake.options_for("video")["format_sort"] == ["vcodec:h264"]
+
+
+def test_our_own_ffmpeg_is_handed_to_yt_dlp(tmp_path, fake):
+    fake.produce = {"audio": [AUDIO_FILE], "video": [VIDEO_FILE]}
+    fake.ffmpeg = "/cache/ffmpeg"
+    download(options(tmp_path, modes="av"), "URL", log=lambda _line: None)
+    assert fake.options_for("audio")["ffmpeg_location"] == "/cache/ffmpeg"
+    assert fake.options_for("video")["ffmpeg_location"] == "/cache/ffmpeg"
+
+
+def test_a_system_ffmpeg_is_left_for_yt_dlp_to_find(tmp_path, fake):
+    fake.produce = {"audio": [AUDIO_FILE]}
+    download(options(tmp_path, modes="a"), "URL", log=lambda _line: None)
+    assert "ffmpeg_location" not in fake.options_for("audio")
+
+
+def test_subtitles_never_wait_for_ffmpeg(tmp_path, fake, monkeypatch):
+    def unavailable(job):
+        raise AppError("Could not download ffmpeg: offline")
+
+    monkeypatch.setattr(stages, "prepare_ffmpeg", unavailable)
+    fake.produce = {"subs": [SUB_FILE], "audio": [AUDIO_FILE]}
+    result = download(options(tmp_path, modes="as"), "URL", log=lambda _line: None)
+
+    assert sorted(path.suffix for path in result.files) == [".srt", ".tsv"]
+    assert result.warnings == ["audio download failed: Could not download ffmpeg: offline"]
+    assert fake.stages_run == ["subs"]
+
+
+class TestPrepareFfmpeg:
+    """The real function, which the `fake` fixture replaces everywhere else."""
+
+    def job(self, tmp_path, cancelled=None, events=None):
+        return Job(
+            Options(output=str(tmp_path)),
+            "URL",
+            tmp_path,
+            DownloadResult(url="URL"),
+            lambda _line: None,
+            cancelled,
+            (lambda kind, details: events.append((kind, details))) if events is not None else None,
+        )
+
+    def test_download_progress_becomes_a_stage_of_its_own(self, tmp_path, monkeypatch):
+        def ensure(log, progress):
+            progress(50, 200)
+            progress(10, 0)  # no size known: nothing to draw
+            return "/cache/ffmpeg"
+
+        monkeypatch.setattr(stages.ffmpeg, "ensure", ensure)
+        events: list = []
+        assert real_prepare_ffmpeg(self.job(tmp_path, events=events)) == "/cache/ffmpeg"
+        assert events == [("progress", {"stage": "ffmpeg", "percent": 25.0, "total": 200})]
+
+    def test_stop_also_stops_the_ffmpeg_download(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(stages.ffmpeg, "ensure", lambda log, progress: progress(1, 2))
+        with pytest.raises(DownloadCancelled):
+            real_prepare_ffmpeg(self.job(tmp_path, cancelled=lambda: True))

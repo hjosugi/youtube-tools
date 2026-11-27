@@ -1,6 +1,6 @@
 import pytest
 
-from ytcli.download import build_audio_quality, build_video_format
+from ytcli.download import build_audio_quality, build_format_sort, build_video_format
 from ytcli.models import AUDIO_QUALITIES, VIDEO_FORMATS, VIDEO_QUALITIES
 
 
@@ -41,3 +41,18 @@ def test_best_audio_quality_maps_to_vbr_zero():
 @pytest.mark.parametrize("quality", [q for q in AUDIO_QUALITIES if q != "best"])
 def test_a_numeric_audio_quality_is_passed_through(quality):
     assert build_audio_quality(quality) == quality
+
+
+@pytest.mark.parametrize("quality", ["best", "1080", "720", "480", "360", "worst"])
+def test_mp4_prefers_h264_up_to_1080p(quality):
+    assert build_format_sort(quality, "mp4") == ["vcodec:h264"]
+
+
+@pytest.mark.parametrize("quality", ["1440", "2160"])
+def test_resolutions_h264_cannot_carry_keep_the_default_order(quality):
+    assert build_format_sort(quality, "mp4") == []
+
+
+@pytest.mark.parametrize("container", ["mkv", "webm"])
+def test_other_containers_take_the_best_codec(container):
+    assert build_format_sort("best", container) == []

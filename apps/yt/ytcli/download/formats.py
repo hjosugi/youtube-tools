@@ -16,3 +16,14 @@ def build_video_format(quality: str, container: str) -> str:
 def build_audio_quality(quality: str) -> str:
     """yt-dlp reads "0" as best VBR and any other number as a target bitrate in kbps."""
     return "0" if quality == "best" else quality
+
+
+def build_format_sort(quality: str, container: str) -> list[str]:
+    """Prefer H.264 in MP4 so the file plays everywhere, not only where AV1 is supported.
+
+    YouTube has no H.264 above 1080p, so an explicit 1440 or 2160 request keeps yt-dlp's
+    own ordering and takes whatever codec carries that resolution.
+    """
+    if container == "mp4" and quality not in ("1440", "2160"):
+        return ["vcodec:h264"]
+    return []

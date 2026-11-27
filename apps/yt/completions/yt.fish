@@ -2,6 +2,11 @@
 # install: cp yt.fish ~/.config/fish/completions/yt.fish
 
 complete -c yt -f
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a mp3 -d "Audio as MP3"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a mp4 -d "Video as MP4"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a sub -d "Subtitles"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a all -d "Audio, video and subtitles"
+complete -c yt -n "__fish_is_first_arg" -a ui -d "Open the local web UI (same as plain yt)"
 complete -c yt -s h -l help -d "Show help"
 complete -c yt -s m -l mode -x -a "a v s av as vs avs all" -d "What to download (a/v/s)"
 complete -c yt -s l -l lang -x -a "en ja en,ja all" -d "Subtitle languages"
@@ -13,7 +18,9 @@ complete -c yt -l aq -l audio-quality -x -a "best 320 256 192 128 96 64" -d "Aud
 complete -c yt -l audio-format -x -a "mp3 m4a opus flac wav" -d "Audio codec"
 complete -c yt -s o -l output -r -F -d "Output directory"
 complete -c yt -s i -l interactive -d "Guided terminal setup"
-complete -c yt -s g -l gui -d "Open the desktop window"
+complete -c yt -s g -l gui -l ui -d "Open the local web UI"
+complete -c yt -l port -x -d "Port for the web UI"
+complete -c yt -l no-open -d "Start the web UI without opening a browser tab"
 complete -c yt -l list-subs -d "List the subtitle languages a video offers"
 complete -c yt -l insecure -d "Skip TLS certificate verification"
 complete -c yt -l save-config -d "Store the current options as defaults"

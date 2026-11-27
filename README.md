@@ -3,65 +3,113 @@
 
 # YouTube Tools
 
-One cross-platform tool for YouTube audio, video and subtitles.
+Get the subtitles, the MP3 or the MP4 of a YouTube video: paste the URL, press one button.
 
-Last verified: 2026-09-04
+There are no commands to remember. Start `yt` and a page opens in your browser, served from
+your own machine. It works the way `duckdb -ui` does: the page is only the front, and the
+same `yt` program does the work behind it.
 
-## The tool
+![The yt page: a URL box and four buttons](docs/images/ui.en.png)
 
-| App | Path | Purpose | Runtime |
-| --- | --- | --- | --- |
-| `yt` | `apps/yt` | CLI and desktop GUI for downloading audio, video and subtitles | Python + uv, or a standalone binary |
+Last verified: 2026-11-27
 
-Everything lives in one command. `apps/yt/README.md` is the full guide.
+## Install
 
-## Quick Start
+One file. You do not need Python, and you do not need to install ffmpeg.
 
-Grab a binary for your platform from [Releases](https://github.com/hjosugi/youtube-tools/releases) — no Python needed — or run from source:
-
-```bash
-cd apps/yt
-uv sync
-uv run yt --help
-```
+Linux and macOS:
 
 ```bash
-yt URL                     # English subtitles as .srt and .tsv
-yt URL -m avs              # audio, video and subtitles in one run
-yt URL -m s -l en,ja       # English and Japanese subtitles
-yt URL -m v --vq 1080      # video capped at 1080p
-yt URL -m a --aq 192       # audio at 192 kbps
-yt --gui                   # desktop window
-yt -i                      # guided terminal setup
-yt -o ~/Downloads --save-config   # remember a download directory
+curl -fsSL https://raw.githubusercontent.com/hjosugi/youtube-tools/main/install.sh | sh
 ```
 
-`ffmpeg` must be on your `PATH` for audio extraction and for merging video and audio streams.
+Windows (PowerShell):
 
-## Repository Layout
+```powershell
+irm https://raw.githubusercontent.com/hjosugi/youtube-tools/main/install.ps1 | iex
+```
+
+Run the same line again to update. You can also take the binary for your platform straight
+from [Releases](https://github.com/hjosugi/youtube-tools/releases).
+
+## Use
+
+1. Start `yt`. From a terminal type `yt`; on Linux and Windows the installer also adds a
+   **yt** entry to the application menu.
+2. Paste a YouTube URL.
+3. Press **Subtitles**, **MP3**, **MP4** or **All three**.
+
+The files land in your Downloads folder, and the page shows them as they finish.
+
+- **Enter** repeats the button you pressed last, so the next video is: paste, Enter.
+- Several URLs go on separate lines. A playlist URL downloads every video in it.
+- The folder, subtitle languages, quality and file types are under **Settings** and are
+  saved as you change them.
+- MP3 and MP4 need ffmpeg. If your machine has none, `yt` downloads its own copy the first
+  time it is needed.
+- The page is served on `127.0.0.1` only, and only the tab that `yt` opened can use it.
+
+## Or one short command
+
+The words are the same as the buttons:
+
+```bash
+yt mp3 URL                 # audio as MP3
+yt mp4 URL                 # video as MP4
+yt sub URL                 # subtitles
+yt all URL                 # all three
+yt sub URL -l en,ja        # English and Japanese subtitles
+yt mp4 URL --vq 1080       # video capped at 1080p
+```
+
+Every option is in [`apps/yt/README.md`](apps/yt/README.md).
+
+## It keeps itself up to date
+
+YouTube changes often, and `yt-dlp`, which does the downloading, follows it. This repository
+follows `yt-dlp` without anyone having to act:
+
+1. [Dependabot](.github/dependabot.yml) checks the dependencies every day and opens a pull request.
+2. CI tests it on Linux, macOS and Windows and builds a binary.
+3. When everything is green the pull request merges itself.
+4. If the update changes anything that ships inside the binary, a patch release is cut and
+   the binaries for five platforms are published.
+
+To get the new version, run the install line again.
+
+## Repository layout
 
 ```text
 apps/
-  yt/            the tool: CLI, GUI, tests, build script, shell completions
+  yt/            the tool: CLI, web UI, tests, build script, shell completions
 docs/
   consolidation.md
-.github/workflows/
-  ci.yml         lint and tests on Linux, macOS and Windows
-  release.yml    standalone binaries for every platform on a v* tag
+scripts/
+  bump-version.py
+install.sh       one-line installer for Linux and macOS
+install.ps1      one-line installer for Windows
+.github/
+  dependabot.yml daily dependency updates
+  workflows/
+    ci.yml       lint, tests, a test build; merges Dependabot updates and releases them
+    release.yml  builds and publishes the binaries for every v* tag
 ```
 
 ## History
 
-This repo started as four separate YouTube utilities. They are now one tool — see
-[`docs/consolidation.md`](docs/consolidation.md) for what merged, what was dropped, and why.
+This used to be four separate YouTube utilities, then one command with a desktop window.
+[`docs/consolidation.md`](docs/consolidation.md) records what was merged, dropped and changed.
 
-## Safety And Scope
+## Safety and scope
 
 - Use this only for content you are allowed to access and process.
-- Respect YouTube terms, copyright, rate limits, and creator permissions.
-- Do not commit downloaded media, subtitles, API keys, cookies, or browser profiles.
-- MP3/MP4 extraction depends on `ffmpeg`.
+- Respect YouTube's terms, copyright, rate limits and creator permissions.
+- Do not commit downloaded media, subtitles, API keys, cookies or browser profiles.
+- The ffmpeg that is downloaded on demand is the static build the
+  [imageio-ffmpeg](https://github.com/imageio/imageio-ffmpeg) project publishes on PyPI.
+  It is GPL-licensed software fetched to your machine; it is not part of this repository
+  or of its binaries.
 
 ## License
 
-0BSD. You can use, copy, modify, and distribute this project for almost any purpose.
+0BSD. You may use, copy, modify and distribute this software for almost any purpose.

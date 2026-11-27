@@ -2,7 +2,7 @@ import pytest
 
 from ytcli.models import AppError
 from ytcli.settings import DEFAULTS, Options
-from ytcli.ui.args import apply_overrides, build_parser, epilog
+from ytcli.ui.args import apply_overrides, build_parser, epilog, parse_args
 
 
 def resolve(argv, config=None) -> Options:
@@ -88,3 +88,28 @@ def test_several_urls_are_kept_in_order():
 
 def test_epilog_follows_the_config_path(isolated_config):
     assert str(isolated_config) in epilog()
+
+
+class TestWords:
+    def test_mode_words_are_not_urls(self):
+        args = parse_args(["mp3", "https://youtu.be/a", "sub"])
+        assert args.urls == ["https://youtu.be/a"]
+        assert args.mode == "mp3,sub"
+
+    def test_words_add_to_the_mode_flag(self):
+        args = parse_args(["URL", "-m", "v", "MP3"])
+        options = apply_overrides(Options.from_config(DEFAULTS), args)
+        assert options.modes == "av"
+
+    def test_ui_words_set_the_flag(self):
+        assert parse_args(["ui"]).gui is True
+        assert parse_args(["gui", "URL"]).urls == ["URL"]
+
+    def test_without_words_nothing_changes(self):
+        args = parse_args(["URL"])
+        assert (args.urls, args.mode, args.gui) == (["URL"], None, False)
+
+    def test_words_urls_and_flags_may_come_in_any_order(self):
+        args = parse_args(["mp3", "--aq", "192", "URL1", "-o", "/tmp/dl", "URL2"])
+        assert args.urls == ["URL1", "URL2"]
+        assert (args.mode, args.audio_quality, args.output) == ("mp3", "192", "/tmp/dl")
