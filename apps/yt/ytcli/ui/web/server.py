@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import socketserver
 import sys
 import threading
 import time
@@ -89,8 +90,13 @@ class App:
         token: str | None = None,
         manager: JobManager | None = None,
         linger: float | None = None,
+        folder_is_default: bool = False,
     ) -> None:
         self.options = options
+        # True while the folder is only our stand-in for "not set" (Downloads). It is then
+        # kept out of the config file, so the command line still defaults to the current
+        # directory until a folder is really chosen in the page.
+        self.folder_is_default = folder_is_default
         self.token = token or secrets.token_urlsafe(24)
         self.manager = manager or JobManager()
         self.linger = linger
@@ -162,8 +168,17 @@ class App:
             raise AppError("Choose a folder to save to.")
         updated = Options.from_config(merged)
         updated.insecure = self.options.insecure
-        save_config(updated.to_config())
+        if "output" in changes:
+            self.folder_is_default = False
         self.options = updated
+        self.remember()
+
+    def remember(self) -> None:
+        """Write the current settings to the config file as the new defaults."""
+        config = self.options.to_config()
+        if self.folder_is_default:
+            config["output"] = DEFAULTS["output"]
+        save_config(config)
 
 
 class UiServer(ThreadingHTTPServer):
@@ -176,6 +191,16 @@ class UiServer(ThreadingHTTPServer):
     def __init__(self, address: tuple[str, int], app: App) -> None:
         super().__init__(address, Handler)
         self.app = app
+
+    def server_bind(self) -> None:
+        """Bind without HTTPServer's reverse lookup of our own address.
+
+        The stock method calls socket.getfqdn(), which takes several seconds on some Macs,
+        only to fill in a server name that nothing here reads.
+        """
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = HOST
+        self.server_port = self.server_address[1]
 
     @property
     def port(self) -> int:
@@ -367,7 +392,7 @@ class Handler(BaseHTTPRequestHandler):
         modes = parse_modes(str(body.get("mode") or app.options.modes))
         # The button pressed last becomes the default one, so Enter repeats it next time.
         app.options = replace(app.options, modes=modes)
-        save_config(app.options.to_config())
+        app.remember()
         jobs = app.manager.submit(urls, app.options)
         self._json({"jobs": [job.id for job in jobs]})
 

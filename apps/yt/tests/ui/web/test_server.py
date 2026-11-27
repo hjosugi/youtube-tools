@@ -136,6 +136,29 @@ class TestState:
         assert state["folder"] == str(tmp_path / "music")
 
 
+class TestFolderDefault:
+    """Downloads is only the UI's stand-in for "not set": the CLI keeps its own default."""
+
+    @pytest.fixture
+    def app(self, ui):
+        ui.server.app.folder_is_default = True
+        return ui.server.app
+
+    def test_using_the_ui_does_not_move_the_command_line_default(self, ui, app, manager):
+        ui.post("/api/jobs", {"urls": [URL], "mode": "a"})
+        ui.post("/api/settings", {"video_quality": "720"})
+        assert load_config({"output": "", "mode": "", "video_quality": ""}) == {
+            "output": ".",
+            "mode": "a",
+            "video_quality": "720",
+        }
+
+    def test_choosing_a_folder_in_the_page_is_remembered(self, ui, app, tmp_path):
+        ui.post("/api/settings", {"output": str(tmp_path / "music")})
+        ui.post("/api/settings", {"video_quality": "720"})
+        assert load_config({"output": ""}) == {"output": str(tmp_path / "music")}
+
+
 class TestDownloading:
     def test_looking_a_url_up(self, ui):
         assert ui.post("/api/info", {"url": f" {URL} "}) == (

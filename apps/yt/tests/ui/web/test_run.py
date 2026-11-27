@@ -86,6 +86,26 @@ def test_a_second_yt_reopens_the_running_one(running, desktop):
     assert lines == [f"yt UI is already running: {url}"]
 
 
+def test_the_stand_in_folder_is_marked_as_not_chosen(monkeypatch, tmp_path):
+    seen: dict = {}
+
+    class Recorder(web.App):
+        def __init__(self, options, **kwargs):
+            seen.update(output=options.output, default=kwargs["folder_is_default"])
+            raise AppError("stop here")
+
+    monkeypatch.setattr(web, "App", Recorder)
+    monkeypatch.setattr(system, "downloads_dir", lambda: tmp_path / "Downloads")
+
+    with pytest.raises(AppError):
+        web.run_ui(Options(), announce=lambda _line: None)
+    assert seen == {"output": str(tmp_path / "Downloads"), "default": True}
+
+    with pytest.raises(AppError):
+        web.run_ui(Options(output="/music"), announce=lambda _line: None)
+    assert seen == {"output": "/music", "default": False}
+
+
 def test_no_open_leaves_the_browser_alone(running, desktop):
     running(port=0, open_browser=False)
     assert desktop["browser"] == []
@@ -151,6 +171,17 @@ class TestSession:
 
 
 class TestBinding:
+    def test_starting_never_waits_for_a_name_lookup(self, manager, monkeypatch):
+        def slow_lookup(*_args):
+            raise AssertionError("the server must not look its own name up")
+
+        monkeypatch.setattr(socket, "getfqdn", slow_lookup)
+        server = web.bind(App(Options(), manager=manager), 0)
+        try:
+            assert (server.server_name, server.server_port) == ("127.0.0.1", server.port)
+        finally:
+            server.server_close()
+
     def test_an_explicit_port_that_is_taken_is_an_error(self, manager):
         with socket.socket() as other:
             other.bind(("127.0.0.1", 0))

@@ -49,7 +49,12 @@ def run_ui(
             system.open_browser(running)
         return 0
 
-    app = App(for_the_ui(options), token=session["token"], linger=linger)
+    app = App(
+        for_the_ui(options),
+        token=session["token"],
+        linger=linger,
+        folder_is_default=options.output == DEFAULTS["output"],
+    )
     server = bind(app, port)
     save_session({"token": app.token, "port": server.port})
     url = start_url(server.port, app.token)
