@@ -31,9 +31,15 @@ Register-ArgumentCompleter -Native -CommandName yt -ScriptBlock {
     $flags = @(
         '--help', '--mode', '--lang', '--sub-format', '--no-auto-subs',
         '--vq', '--video-quality', '--video-format', '--aq', '--audio-quality', '--audio-format',
-        '--output', '--interactive', '--gui', '--list-subs', '--insecure',
+        '--output', '--interactive', '--gui', '--ui', '--port', '--no-open', '--list-subs', '--insecure',
         '--save-config', '--show-config', '--config-path', '--version'
     )
+    if ($wordToComplete -notlike '-*') {
+        # Plain words instead of flags: yt mp3 URL, yt sub URL, yt ui
+        return 'mp3', 'mp4', 'sub', 'all', 'ui' |
+            Where-Object { $_ -like "$wordToComplete*" } |
+            ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
+    }
     $flags |
         Where-Object { $_ -like "$wordToComplete*" } |
         ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterName', $_) }

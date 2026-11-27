@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 defaults:
   run:
     working-directory: apps/yt
@@ -30,5 +37,83 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Format
+        run: uv run ruff format --check .
+
       - name: Test
         run: uv run pytest -q
+
+  # Tests alone do not notice a dependency update that breaks the frozen binary.
+  binary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Build standalone binary
+        run: uv run python build.py
+
+      - name: Smoke test the binary
+        run: uv run python smoke.py dist/yt-linux-x86_64
+
+  # Dependabot pull requests merge themselves once everything above is green. When the
+  # update changes something that ships inside the binary (yt-dlp above all), a patch
+  # release follows, so the downloadable `yt` never falls behind YouTube.
+  dependabot:
+    needs: [test, binary]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+    defaults:
+      run:
+        working-directory: .
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Merge the update
+        run: gh pr merge --squash --delete-branch "${{ github.event.pull_request.html_url }}"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 2
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+
+      - name: Did anything inside the binary change?
+        id: shipped
+        run: |
+          git worktree add --detach ../before HEAD^
+          export_runtime() { uv export --project "$1" --frozen --no-dev --no-emit-project --no-hashes --no-header --quiet; }
+          if [ "$(export_runtime ../before/apps/yt)" = "$(export_runtime apps/yt)" ]; then
+            echo "Only development tools or workflows changed: no release."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Cut a patch release
+        if: steps.shipped.outputs.changed == 'true'
+        run: |
+          version="$(python3 scripts/bump-version.py patch)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release ${version}"
+          git tag "v${version}"
+          git push origin HEAD:main "v${version}"
+          # A tag pushed with the workflow token does not start other workflows, so ask.
+          gh workflow run release.yml --ref "v${version}"

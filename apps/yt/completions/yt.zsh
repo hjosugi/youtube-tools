@@ -15,14 +15,16 @@ _yt() {
         '--audio-format[audio codec]:codec:(mp3 m4a opus flac wav)' \
         '(-o --output)'{-o,--output}'[output directory]:directory:_files -/' \
         '(-i --interactive)'{-i,--interactive}'[guided terminal setup]' \
-        '(-g --gui)'{-g,--gui}'[open the desktop window]' \
+        '(-g --gui --ui)'{-g,--gui,--ui}'[open the local web UI]' \
+        '--port[port for the web UI]:port:' \
+        '--no-open[start the web UI without opening a browser tab]' \
         '--list-subs[list the subtitle languages a video offers]' \
         '--insecure[skip TLS certificate verification]' \
         '--save-config[store the current options as defaults]' \
         '--show-config[print the effective defaults]' \
         '--config-path[print the config file location]' \
         '--version[print the version]' \
-        '*:url:_urls'
+        '*:what to get, or a URL:(mp3 mp4 sub all ui)'
 }
 
 _yt "$@"

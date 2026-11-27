@@ -9,8 +9,9 @@ _yt_completion() {
 
     local opts="-h --help -m --mode -l --lang -f --sub-format --no-auto-subs
         --vq --video-quality --video-format --aq --audio-quality --audio-format
-        -o --output -i --interactive -g --gui --list-subs --insecure
+        -o --output -i --interactive -g --gui --ui --port --no-open --list-subs --insecure
         --save-config --show-config --config-path --version"
+    local words="mp3 mp4 sub all ui"
 
     case "${prev}" in
         -m|--mode)
@@ -42,6 +43,8 @@ _yt_completion() {
 
     if [[ ${cur} == -* ]]; then
         COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+    else
+        COMPREPLY=( $(compgen -W "${words}" -- "${cur}") )
     fi
     return 0
 }

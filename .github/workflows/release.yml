@@ -1,10 +1,16 @@
 name: Build and Release
 
+# Runs for every v* tag. Started by hand on a branch it only builds and tests the
+# binaries; started on a tag (which is what ci.yml does for automatic releases) it
+# also publishes them.
 on:
   push:
     tags:
       - 'v*'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 defaults:
   run:
@@ -20,9 +26,11 @@ jobs:
         include:
           - os: ubuntu-latest
             label: linux-x86_64
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
           - os: macos-latest
             label: macos-arm64
-          - os: macos-13
+          - os: macos-15-intel
             label: macos-x86_64
           - os: windows-latest
             label: windows-x86_64
@@ -37,26 +45,26 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      - name: The tag must match the version in the code
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: test "v$(uv run python ../../scripts/bump-version.py --show)" = "${GITHUB_REF_NAME}"
+
       - name: Test
         run: uv run pytest -q
 
       - name: Build standalone binary
         run: uv run python build.py
 
-      - name: Smoke test the binary (unix)
-        if: runner.os != 'Windows'
-        run: ./dist/yt-* --version
-
-      - name: Smoke test the binary (windows)
-        if: runner.os == 'Windows'
-        run: Get-ChildItem dist/yt-*.exe | ForEach-Object { & $_.FullName --version }
-        shell: pwsh
+      - name: Smoke test the binary
+        shell: bash
+        run: uv run python smoke.py dist/yt-${{ matrix.label }}*
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: yt-${{ matrix.label }}
-          path: apps/yt/dist/yt-*
+          path: apps/yt/dist/yt-${{ matrix.label }}*
           if-no-files-found: error
 
   release:
@@ -65,25 +73,63 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v7
 
       - name: Download all binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
+
+      - name: Write checksums
+        run: cd artifacts && sha256sum yt-* > SHA256SUMS && cat SHA256SUMS
 
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/yt-*
+            artifacts/SHA256SUMS
             apps/yt/completions/yt.bash
             apps/yt/completions/yt.zsh
             apps/yt/completions/yt.fish
             apps/yt/completions/yt.ps1
+          generate_release_notes: true
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # The one-line installers are the front door, so prove they work against the release
+  # that was just published.
+  install:
+    needs: release
+    name: install on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install (Linux, macOS)
+        if: runner.os != 'Windows'
+        run: |
+          YT_VERSION="${GITHUB_REF_NAME}" sh install.sh
+          "$HOME/.local/bin/yt" --version
+
+      - name: Install (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:YT_VERSION = $env:GITHUB_REF_NAME
+          ./install.ps1
+          & "$env:LOCALAPPDATA\Programs\yt\yt.exe" --version
