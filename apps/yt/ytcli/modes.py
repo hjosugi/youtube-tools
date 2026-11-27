@@ -30,6 +30,9 @@ def parse_modes(value: str) -> str:
 
     letters: set[str] = set()
     for token in (part.strip() for part in text.replace("+", ",").split(",") if part.strip()):
+        if token == "all":
+            letters.update(MODE_LETTERS)
+            continue
         if token in MODE_ALIASES:
             letters.add(MODE_ALIASES[token])
             continue

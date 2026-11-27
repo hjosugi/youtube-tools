@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -35,6 +36,26 @@ class SubtitleTracks:
 
     manual: tuple[str, ...] = ()
     automatic: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class VideoInfo:
+    """What we know about a URL before downloading anything."""
+
+    url: str
+    id: str = ""
+    title: str = ""
+    uploader: str = ""
+    duration: int = 0
+    thumbnail: str = ""
+    tracks: SubtitleTracks = SubtitleTracks()
+    # Filled only for playlists: the video URLs to download one by one.
+    entries: tuple[str, ...] = ()
+
+
+# Structured progress for a UI, next to the plain-text log: notify(kind, details).
+# Kinds: "stage", "progress", "processing", "saved", "warning".
+Notify = Callable[[str, dict], None]
 
 
 @dataclass

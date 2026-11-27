@@ -3,11 +3,12 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from .. import ffmpeg
 from ..models import AppError, DownloadCancelled
 from ..subtitles import SUBTITLE_WRITERS, parse_subtitle_file, resolve_subtitle_langs
 from ..utils import base_stem, language_of, unique_path
 from .client import list_subtitles, run_download
-from .formats import build_audio_quality, build_video_format
+from .formats import build_audio_quality, build_format_sort, build_video_format
 from .job import Job
 
 SUBTITLE_SUFFIXES = (".srt", ".vtt", ".webvtt")
@@ -16,6 +17,7 @@ SUBTITLE_SUFFIXES = (".srt", ".vtt", ".webvtt")
 def fetch_subtitles(job: Job) -> None:
     """Download the resolved subtitle tracks and write them in every requested format."""
     options = job.options
+    job.tell("stage", stage="subtitle")
     job.log(f"[subtitle] requested: {', '.join(options.sub_langs)}")
 
     try:
@@ -31,7 +33,7 @@ def fetch_subtitles(job: Job) -> None:
         return
 
     work_dir = job.stage_dir("subs")
-    ydl_options = job.ydl_options(work_dir)
+    ydl_options = job.ydl_options(work_dir, "subtitle")
     ydl_options.update(
         {
             "skip_download": True,
@@ -72,9 +74,18 @@ def convert_subtitle(job: Job, source: Path) -> None:
 
 def fetch_media(job: Job, kind: str) -> None:
     """Download audio or video in its own pass, then move the result to the output directory."""
+    job.tell("stage", stage=kind)
     work_dir = job.stage_dir(kind)
-    ydl_options = job.ydl_options(work_dir)
+    ydl_options = job.ydl_options(work_dir, kind)
     ydl_options.update(media_options(job, kind))
+
+    try:
+        location = prepare_ffmpeg(job)
+    except AppError as error:
+        job.warn(f"{kind} download failed: {error}")
+        return
+    if location:
+        ydl_options["ffmpeg_location"] = location
 
     if not run_stage(job, ydl_options, kind):
         return
@@ -87,6 +98,17 @@ def fetch_media(job: Job, kind: str) -> None:
         target = unique_path(job.options.out_dir / f"{base_stem(source)}{source.suffix}")
         shutil.move(str(source), str(target))
         job.save(target)
+
+
+def prepare_ffmpeg(job: Job) -> str | None:
+    """Converting to MP3 and merging MP4 need ffmpeg; fetch our own copy when there is none."""
+
+    def progress(done: int, total: int) -> None:
+        job.check_cancelled()
+        if total:
+            job.tell("progress", stage="ffmpeg", percent=round(done * 100.0 / total, 1), total=total)
+
+    return ffmpeg.ensure(job.log, progress)
 
 
 def media_options(job: Job, kind: str) -> dict:
@@ -107,6 +129,7 @@ def media_options(job: Job, kind: str) -> dict:
     job.log(f"[video] {options.video_format} @ {options.video_quality}")
     return {
         "format": build_video_format(options.video_quality, options.video_format),
+        "format_sort": build_format_sort(options.video_quality, options.video_format),
         "merge_output_format": options.video_format,
     }
 

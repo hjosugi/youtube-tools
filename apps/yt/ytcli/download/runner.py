@@ -5,7 +5,7 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
-from ..models import AppError, DownloadResult
+from ..models import AppError, DownloadResult, Notify
 from ..settings import Options
 from .client import Cancelled, Logger, ensure_ca_bundle
 from .job import Job
@@ -24,6 +24,7 @@ def download(
     url: str,
     log: Logger = print,
     cancelled: Cancelled | None = None,
+    notify: Notify | None = None,
 ) -> DownloadResult:
     """Download every requested mode for one URL into options.out_dir."""
     if not options.modes:
@@ -34,7 +35,7 @@ def download(
     options.out_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="yt-") as staging:
-        job = Job(options, url, Path(staging), result, log, cancelled)
+        job = Job(options, url, Path(staging), result, log, cancelled, notify)
         for letter, fetch in STAGES:
             if letter not in options.modes:
                 continue

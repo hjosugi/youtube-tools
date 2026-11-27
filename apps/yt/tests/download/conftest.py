@@ -16,6 +16,7 @@ class FakeYtDlp:
         self.tracks: SubtitleTracks | None = SubtitleTracks(("en",), ("en", "de"))
         self.produce: dict[str, list[tuple[str, str]]] = {}
         self.fail: set[str] = set()
+        self.ffmpeg: str | None = None  # None means "the ffmpeg on PATH"
 
     @property
     def stages_run(self) -> list[str]:
@@ -44,4 +45,5 @@ def fake(monkeypatch) -> FakeYtDlp:
     instance = FakeYtDlp()
     monkeypatch.setattr(stages, "run_download", instance.run)
     monkeypatch.setattr(stages, "list_subtitles", instance.list_subtitles)
+    monkeypatch.setattr(stages, "prepare_ffmpeg", lambda job: instance.ffmpeg)
     return instance

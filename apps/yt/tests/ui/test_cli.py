@@ -70,9 +70,65 @@ def test_an_unexpected_error_does_not_escape(monkeypatch, capsys):
     assert "unexpected error" in capsys.readouterr().err
 
 
-def test_no_url_without_a_terminal_is_an_error(monkeypatch, capsys):
+@pytest.fixture
+def fake_ui(monkeypatch):
+    """Record how the web UI would have been started instead of serving it."""
+    calls: list[dict] = []
+
+    def fake(options, **kwargs):
+        calls.append({"options": options, **kwargs})
+        return 0
+
+    monkeypatch.setattr("ytcli.ui.web.run_ui", fake)
+    return calls
+
+
+def test_a_bare_yt_opens_the_ui(monkeypatch, fake_ui):
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    assert cli.main([]) == 0
+    assert fake_ui[0]["open_browser"] is True
+    assert fake_ui[0]["linger"] is None  # a terminal can press Ctrl+C
+
+
+def test_without_a_terminal_the_ui_leaves_by_itself(monkeypatch, fake_ui):
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
-    assert cli.main([]) == 1
+    assert cli.main([]) == 0
+    assert fake_ui[0]["linger"] > 0
+
+
+@pytest.mark.parametrize("argv", [["ui"], ["gui"], ["--gui"], ["-g"], ["--ui"]])
+def test_every_spelling_of_the_ui_opens_it(argv, fake_ui):
+    assert cli.main(argv) == 0
+    assert len(fake_ui) == 1
+
+
+def test_ui_flags_reach_the_server(fake_ui):
+    assert cli.main(["ui", "--port", "5000", "--no-open", "-o", "/tmp/dl"]) == 0
+    assert fake_ui[0]["port"] == 5000
+    assert fake_ui[0]["open_browser"] is False
+    assert fake_ui[0]["options"].output == "/tmp/dl"
+
+
+@pytest.mark.parametrize(
+    ("argv", "modes"),
+    [(["mp3", "URL"], "a"), (["URL", "mp4"], "v"), (["sub", "URL"], "s"), (["all", "URL"], "avs")],
+)
+def test_a_word_says_what_to_download(argv, modes, fake_download):
+    assert cli.main(argv) == 0
+    options, url = fake_download[0]
+    assert (options.modes, url) == (modes, "URL")
+
+
+def test_a_word_without_a_url_asks_for_the_url_only(monkeypatch, fake_download):
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
+    monkeypatch.setattr("builtins.input", lambda _prompt: "one two")
+    assert cli.main(["mp3"]) == 0
+    assert [url for _options, url in fake_download] == ["one", "two"]
+
+
+def test_a_word_without_a_url_or_a_terminal_is_an_error(monkeypatch, capsys):
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: False)
+    assert cli.main(["mp3"]) == 1
     assert "no URL given" in capsys.readouterr().err
 
 

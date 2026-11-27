@@ -102,3 +102,31 @@ def test_a_cancelled_run_never_starts(monkeypatch, log):
 
     assert report.cancelled is True
     assert log == []
+
+
+class TestPlaylists:
+    def test_a_playlist_is_downloaded_video_by_video(self, monkeypatch, log):
+        monkeypatch.setattr(
+            batch, "expand_playlist", lambda url, insecure=False: ["v1", "v2"] if url == "list" else [url]
+        )
+        seen: list[str] = []
+        stub(monkeypatch, lambda url: seen.append(url) or DownloadResult(url=url, files=["a.srt"]))
+
+        report = batch.download_all(options("one", "list"), log.append)
+
+        assert seen == ["one", "v1", "v2"]
+        assert report.saved == 3
+        assert "Playlist with 2 videos: list" in log
+
+    def test_a_playlist_that_cannot_be_read_is_tried_as_a_plain_url(self, monkeypatch, log, errors):
+        def boom(url, insecure=False):
+            raise AppError("Could not read video info: offline")
+
+        monkeypatch.setattr(batch, "expand_playlist", boom)
+        seen: list[str] = []
+        stub(monkeypatch, lambda url: seen.append(url) or DownloadResult(url=url, files=["a.srt"]))
+
+        batch.download_all(options("list"), log.append, errors.append)
+
+        assert seen == ["list"]
+        assert errors == ["error (list): Could not read video info: offline"]
