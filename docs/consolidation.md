@@ -86,3 +86,51 @@ The four apps became one command: `apps/yt`, installed as `yt`.
 3. ~~Review dependency baselines app by app.~~ One project, current `yt-dlp`, `certifi`, `pytest`, `ruff`, `pyinstaller`.
 4. ~~Add GitHub Actions after the commands are stable.~~ Done: `ci.yml` and `release.yml` at the repo root.
    The old workflow lived in `apps/yt-fetcher-cli/.github/workflows/`, where GitHub never ran it.
+
+---
+
+# A Web UI Instead Of Commands
+
+Date: 2026-11-27
+
+The tool worked, but using it meant remembering `-m a`, installing ffmpeg first and, for the
+window, having a Python with Tk. This round removes those three hurdles.
+
+## What changed
+
+| Before | Now |
+| --- | --- |
+| `yt --gui` opened a Tk window | A bare `yt` opens a page in the browser, served on `127.0.0.1` |
+| `yt URL -m a` | `yt mp3 URL` (also `mp4`, `sub`, `all`); `-m` still works |
+| A bare `yt` in a terminal started the question-by-question wizard | The wizard is `yt -i` |
+| ffmpeg had to be installed before MP3 or MP4 worked | Without one, a pinned static build is downloaded on first use |
+| Download a binary, `chmod +x`, move it into `PATH` | `curl ... install.sh \| sh`, or `irm ... install.ps1 \| iex` |
+| Dependencies were updated by hand | Dependabot, merged by CI, released automatically |
+
+## Why a page in the browser
+
+- Tk is missing from many Python builds, NixOS and uv's among them, so the window did not
+  open on the machine the tool is developed on. A browser is always there.
+- The page needs nothing beyond the standard library's `http.server`, so the binary lost
+  Tcl/Tk rather than gaining a GUI toolkit.
+- It is the `duckdb -ui` model: one program, and the UI is just another way to call it.
+  The page shows the equivalent command under every download.
+
+## Smaller changes in behaviour
+
+- MP4 prefers H.264 up to 1080p, so the file plays in every player. It used to pick AV1
+  whenever YouTube offered it.
+- A watch URL that carries `&list=...` downloads that one video. A playlist URL is expanded
+  into its videos, and subtitles now work for playlists as well.
+- yt-dlp is installed with its `default` and `curl-cffi` extras and is told about every
+  JavaScript runtime on `PATH`, not only Deno. This removes the "formats may be missing"
+  and "no impersonate target" warnings.
+- Release binaries now also exist for Linux arm64, and come with a `SHA256SUMS` file.
+- `[tool.bumpversion]` gave way to `scripts/bump-version.py`, which needs nothing installed
+  and also updates `uv.lock`.
+
+## What was dropped
+
+- The Tk window (`ytcli/ui/gui`). The web UI replaces it on every platform.
+- `apps/yt/install.sh`, which installed a locally built binary with `sudo`. The installers
+  at the repository root download the release and need no root.
