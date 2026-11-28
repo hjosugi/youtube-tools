@@ -1,10 +1,10 @@
 #compdef yt
-# zsh completion for yt
-# install: cp yt.zsh <any dir on $fpath>/_yt
+# Zsh completion for yt. After compinit: source <(yt -c zsh)
 
 _yt() {
     _arguments -s -S \
         '(-h --help)'{-h,--help}'[show help]' \
+        '(-c --completion)'{-c,--completion}'[print a completion script]:shell:(bash zsh fish pwsh powershell)' \
         '(-m --mode)'{-m,--mode}'[what to download: a, v, s, or all]:mode:(a v s av as vs avs all)' \
         '(-l --lang)'{-l,--lang}'[subtitle languages, comma separated, or all]:languages:(en ja en,ja all)' \
         '(-f --sub-format)'{-f,--sub-format}'[subtitle output formats]:formats:(srt vtt tsv txt md srt,tsv)' \
@@ -24,7 +24,12 @@ _yt() {
         '--show-config[print the effective defaults]' \
         '--config-path[print the config file location]' \
         '--version[print the version]' \
-        '*:what to get, or a URL:(mp3 mp4 sub all ui)'
+        '*:what to get, or a URL:(a v s av as vs avs mp3 mp4 sub all ui)'
 }
 
-_yt "$@"
+# compinit autoloads this file as _yt. It can also be sourced in an initialized shell.
+if [[ ${funcstack[1]} == _yt ]]; then
+    _yt "$@"
+else
+    compdef _yt yt
+fi

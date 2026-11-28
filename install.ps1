@@ -58,7 +58,23 @@ $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 if (($userPath -split ';') -notcontains $dir) {
     $entries = @($userPath -split ';' | Where-Object { $_ }) + $dir
     [Environment]::SetEnvironmentVariable('Path', ($entries -join ';'), 'User')
-    Write-Host "Added $dir to your PATH. Open a new terminal, then run: yt"
-} else {
-    Write-Host 'Run: yt'
+    Write-Host "Added $dir to your PATH."
 }
+if (($env:Path -split ';') -notcontains $dir) { $env:Path += ";$dir" }
+
+# Keep the script out of the executable search path so typing yt still runs yt.exe.
+$completionDir = Join-Path $dir 'completions'
+New-Item -ItemType Directory -Force -Path $completionDir | Out-Null
+$completion = Join-Path $completionDir 'yt.ps1'
+if ((& $target --help) -match '--completion') {
+    $script = & $target -c pwsh
+    if ($LASTEXITCODE -ne 0) { throw 'Could not read the PowerShell completion from yt.exe.' }
+    Set-Content -LiteralPath $completion -Encoding UTF8 -Value $script
+} else {
+    # v1.1.0 and earlier supplied the completer as a release asset.
+    Invoke-WebRequest -Uri "$base/yt.ps1" -OutFile $completion -UseBasicParsing
+}
+. $completion
+Write-Host 'PowerShell completion is active. To keep it in new terminals, add this line to $PROFILE:'
+Write-Host (". '{0}'" -f $completion.Replace("'", "''"))
+Write-Host 'Run: yt'

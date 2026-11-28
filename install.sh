@@ -73,15 +73,26 @@ Categories=AudioVideo;Network;
 DESKTOP
 fi
 
-# Shell completions, for the shells that have a per-user place for them.
-if [ -d "$HOME/.config/fish" ]; then
-    mkdir -p "$HOME/.config/fish/completions"
-    curl -fsSL "${base}/yt.fish" -o "$HOME/.config/fish/completions/yt.fish" || true
-fi
+# Use the installed binary's own completions. Older pinned releases shipped separate files.
+install_completion() {
+    if ! "${dir}/yt" -c "$1" > "${work}/completion" 2>/dev/null; then
+        curl -fsSL "${base}/yt.$1" -o "${work}/completion"
+    fi
+    mkdir -p "$(dirname "$2")"
+    cp "${work}/completion" "$2"
+}
+
 if command -v bash >/dev/null 2>&1; then
-    completions="${data}/bash-completion/completions"
-    mkdir -p "$completions"
-    curl -fsSL "${base}/yt.bash" -o "${completions}/yt" || true
+    bash_dirs="${BASH_COMPLETION_USER_DIR:-$data/bash-completion}"
+    install_completion bash "${bash_dirs%%:*}/completions/yt"
+fi
+fish_config="${XDG_CONFIG_HOME:-$HOME/.config}/fish"
+if command -v fish >/dev/null 2>&1 || [ -d "$fish_config" ]; then
+    install_completion fish "${fish_config}/completions/yt.fish"
+fi
+if command -v zsh >/dev/null 2>&1; then
+    install_completion zsh "${data}/zsh/site-functions/_yt"
+    echo 'Zsh: put fpath=("${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions" $fpath) before compinit in .zshrc.'
 fi
 
 case ":${PATH}:" in

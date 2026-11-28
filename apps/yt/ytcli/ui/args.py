@@ -17,8 +17,15 @@ PASS_THROUGH = ("video_quality", "video_format", "audio_quality", "audio_format"
 
 # Plain words accepted next to the URLs, so nobody has to remember `-m a` or `--gui`:
 # `yt mp3 URL`, `yt mp4 sub URL`, `yt ui`.
-MODE_WORDS = frozenset(MODE_ALIASES) | {"all"}
+MODE_WORDS = frozenset(MODE_ALIASES) | {"a", "v", "s", "av", "as", "vs", ALL_MODES, "all"}
 UI_WORDS = frozenset({"ui", "gui"})
+COMPLETION_FILES = {
+    "bash": "yt.bash",
+    "zsh": "yt.zsh",
+    "fish": "yt.fish",
+    "pwsh": "yt.ps1",
+    "powershell": "yt.ps1",
+}
 
 
 def epilog() -> str:
@@ -30,6 +37,9 @@ examples:
   yt mp4 URL                      video as MP4
   yt sub URL                      subtitles in the configured default languages
   yt all URL                      audio, video and subtitles in one run
+  yt s URL                        one-letter form (a for audio, v for video, s for subtitles)
+  yt av URL                       audio and video together
+  yt -c bash                      print the Bash tab completion script
   yt sub URL -l en,ja             English and Japanese subtitles
   yt sub URL -l all               every subtitle track the video offers
   yt mp4 URL --vq 1080            video capped at 1080p
@@ -53,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
         "urls",
         nargs="*",
         metavar="WORD|URL",
-        help="YouTube URLs, optionally with what to get: mp3, mp4, sub, all. `ui` opens the web UI",
+        help="YouTube URLs and what to get: a/mp3, v/mp4, s/sub, av or all. `ui` opens the web UI",
     )
     parser.add_argument(
         "-m",
@@ -117,6 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--show-config", action="store_true", help="print the effective defaults and exit")
     parser.add_argument("--config-path", action="store_true", help="print the config file path and exit")
     parser.add_argument("--version", action="version", version=f"yt {__version__}")
+    parser.add_argument(
+        "-c",
+        "--completion",
+        choices=COMPLETION_FILES,
+        help="print this shell's tab completion script and exit",
+    )
     return parser
 
 

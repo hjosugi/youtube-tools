@@ -44,7 +44,7 @@ def main() -> int:
         # yt-dlp resolves its extractors at runtime, so PyInstaller cannot see them.
         "--collect-submodules",
         "yt_dlp",
-        # The web UI's page, script and stylesheet are data files inside the package.
+        # Include the web UI assets and the four shell completion scripts.
         "--collect-data",
         "ytcli",
         # Nothing uses Tk any more; leaving it out keeps the binary smaller.

@@ -24,6 +24,16 @@ def test_config_path_command(capsys):
     assert "config.toml" in capsys.readouterr().out
 
 
+def test_completion_does_not_require_a_valid_config(isolated_config, capsys):
+    isolated_config.parent.mkdir(parents=True)
+    isolated_config.write_text("[broken", encoding="utf-8")
+    assert cli.main(["-c", "pwsh"]) == 0
+    script = capsys.readouterr().out
+    assert "Register-ArgumentCompleter" in script
+    assert cli.main(["--completion", "powershell"]) == 0
+    assert capsys.readouterr().out == script
+
+
 def test_show_config_command(capsys):
     assert cli.main(["--show-config"]) == 0
     out = capsys.readouterr().out
@@ -111,7 +121,14 @@ def test_ui_flags_reach_the_server(fake_ui):
 
 @pytest.mark.parametrize(
     ("argv", "modes"),
-    [(["mp3", "URL"], "a"), (["URL", "mp4"], "v"), (["sub", "URL"], "s"), (["all", "URL"], "avs")],
+    [
+        (["mp3", "URL"], "a"),
+        (["URL", "mp4"], "v"),
+        (["sub", "URL"], "s"),
+        (["all", "URL"], "avs"),
+        *(([word, "URL"], word) for word in ("a", "v", "s", "av", "as", "vs", "avs")),
+        (["s", "URL", "a"], "as"),
+    ],
 )
 def test_a_word_says_what_to_download(argv, modes, fake_download):
     assert cli.main(argv) == 0

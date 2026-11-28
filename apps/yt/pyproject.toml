@@ -1,6 +1,6 @@
 [project]
 name = "yt-tools"
-version = "1.1.0"
+version = "1.1.1"
 description = "YouTube subtitles, MP3 and MP4 in one click: a local web UI and a CLI"
 readme = "README.md"
 license = "0BSD"
