@@ -17,6 +17,7 @@ class FakeYtDlp:
         self.produce: dict[str, list[tuple[str, str]]] = {}
         self.fail: set[str] = set()
         self.ffmpeg: str | None = None  # None means "the ffmpeg on PATH"
+        self.lookups = 0
 
     @property
     def stages_run(self) -> list[str]:
@@ -33,7 +34,8 @@ class FakeYtDlp:
         for filename, content in self.produce.get(work_dir.name, []):
             (work_dir / filename).write_text(content, encoding="utf-8")
 
-    def list_subtitles(self, url: str, log=None, insecure: bool = False) -> SubtitleTracks:
+    def list_subtitles(self, url: str, insecure: bool = False) -> SubtitleTracks:
+        self.lookups += 1
         if self.tracks is None:
             raise AppError("Could not read video info: boom")
         return self.tracks

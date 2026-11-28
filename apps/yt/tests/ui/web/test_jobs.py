@@ -1,14 +1,19 @@
 """The download queue: what the page sees while jobs wait, run, finish and fail."""
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+import pytest
+
+from ytcli.models import AppError
 from ytcli.settings import Options
 from ytcli.ui.web import jobs as jobs_module
-from ytcli.ui.web.jobs import command_line
 
 from .conftest import PLAYLIST, wait_until
 
 
-def options(tmp_path, **overrides) -> Options:
-    return Options(output=str(tmp_path / "out"), modes="a", **overrides)
+def options(tmp_path, modes="a", **overrides) -> Options:
+    return Options(output=str(tmp_path / "out"), modes=modes, **overrides)
 
 
 def only(manager) -> dict:
@@ -44,12 +49,58 @@ def test_each_job_keeps_the_options_it_was_started_with(tmp_path, manager, downl
 
 def test_a_lookup_from_the_page_is_reused(tmp_path, manager, downloads):
     url = "https://y/watch?v=one"
+    info = manager.info(url)
+    assert info.title == "Title of one"
     assert manager.info(url).title == "Title of one"
-    assert manager.info(url).title == "Title of one"
-    (job,) = manager.submit([url], options(tmp_path))
+    (job,) = manager.submit([url], options(tmp_path, modes="as"))
     assert job.title == "Title of one"  # known before the worker even starts
     wait_until(lambda: only(manager)["status"] == "done")
     assert downloads.probed == [url]
+    assert downloads.tracks == [info.tracks]
+
+
+def test_a_download_joins_an_unfinished_preview(tmp_path, manager, downloads, monkeypatch):
+    started, release = threading.Event(), threading.Event()
+    url = "https://y/watch?v=one"
+
+    def probe(url, insecure):
+        started.set()
+        assert release.wait(5)
+        return downloads.probe(url, insecure=insecure)
+
+    monkeypatch.setattr(manager, "_probe", probe)
+    with ThreadPoolExecutor() as pool:
+        preview = pool.submit(manager.info, url)
+        try:
+            assert started.wait(5)
+            manager.submit([url], options(tmp_path, modes="s"))
+            wait_until(lambda: only(manager)["status"] == "running")
+        finally:
+            release.set()
+        tracks = preview.result().tracks
+    wait_until(lambda: not manager.active())
+    assert downloads.probed == [url]
+    assert downloads.tracks == [tracks]
+
+
+def test_a_failed_lookup_can_be_retried(manager, downloads, monkeypatch):
+    url = "https://y/watch?v=one"
+
+    def unavailable(url, insecure):
+        raise AppError("unavailable")
+
+    monkeypatch.setattr(manager, "_probe", unavailable)
+    with pytest.raises(AppError, match="unavailable"):
+        manager.info(url)
+    monkeypatch.setattr(manager, "_probe", downloads.probe)
+    assert manager.info(url).title == "Title of one"
+
+
+def test_a_verified_lookup_does_not_reuse_an_insecure_result(manager, downloads):
+    url = "https://y/watch?v=one"
+    manager.info(url, insecure=True)
+    manager.info(url)
+    assert downloads.probed == [url, url]
 
 
 def test_progress_is_visible_while_a_job_runs(tmp_path, manager, downloads):
@@ -109,11 +160,44 @@ def test_stopping_a_waiting_job_never_starts_it(tmp_path, manager, downloads):
 
 
 def test_a_playlist_becomes_one_job_per_video(tmp_path, manager, downloads):
+    manager.info(PLAYLIST)  # the preview has already read the playlist once
     manager.submit([PLAYLIST], options(tmp_path))
     wait_until(lambda: len(downloads.calls) == 2 and not manager.active())
     _revision, listed = manager.snapshot()
     assert [job["url"] for job in listed] == ["https://y/watch?v=p1", "https://y/watch?v=p2"]
     assert all(job["status"] == "done" for job in listed)
+    assert [job["title"] for job in listed] == ["p1", "p2"]
+    assert downloads.probed == [PLAYLIST]
+
+
+def test_playlist_subtitles_use_each_videos_own_tracks(tmp_path, manager, downloads):
+    manager.submit([PLAYLIST], options(tmp_path, modes="s"))
+    wait_until(lambda: not manager.active())
+    assert downloads.probed == [PLAYLIST, "https://y/watch?v=p1", "https://y/watch?v=p2"]
+    assert len(downloads.tracks) == 2
+    assert all(tracks and tracks.manual == ("en",) for tracks in downloads.tracks)
+
+
+def test_cancelling_during_playlist_lookup_never_queues_its_children(
+    tmp_path, manager, downloads, monkeypatch
+):
+    started, release = threading.Event(), threading.Event()
+
+    def probe(url, insecure):
+        started.set()
+        assert release.wait(5)
+        return downloads.probe(url, insecure=insecure)
+
+    monkeypatch.setattr(manager, "_probe", probe)
+    (job,) = manager.submit([PLAYLIST], options(tmp_path))
+    try:
+        assert started.wait(5)
+        assert manager.cancel(job.id)
+    finally:
+        release.set()
+    wait_until(lambda: not manager.active())
+    assert only(manager)["status"] == "cancelled"
+    assert downloads.calls == []
 
 
 def test_clearing_keeps_what_is_still_running(tmp_path, manager, downloads):
@@ -133,47 +217,15 @@ def test_wait_returns_when_something_changes_or_time_is_up(tmp_path, manager):
     assert manager.wait(revision, 5) != revision
 
 
+def test_a_closed_queue_never_accepts_a_job(tmp_path, manager):
+    manager.shutdown()
+    with pytest.raises(AppError, match="shutting down"):
+        manager.submit(["https://y/watch?v=one"], options(tmp_path))
+    assert not manager.active()
+
+
 def test_the_lookup_cache_stays_small(manager, monkeypatch):
     monkeypatch.setattr(jobs_module, "INFO_CACHE_SIZE", 3)
     for number in range(5):
         manager.info(f"https://y/watch?v={number}")
     assert len(manager._info) == 3
-
-
-class TestCommandLine:
-    """The line shown under a job: the same download as a command."""
-
-    def test_words_for_the_usual_formats(self):
-        assert command_line(Options(modes="a", output="/dl"), "URL") == "yt mp3 URL -o /dl"
-        assert command_line(Options(modes="v", output="/dl"), "URL") == "yt mp4 URL -o /dl"
-        assert command_line(Options(modes="s", output="/dl"), "URL") == "yt sub URL -o /dl"
-        assert command_line(Options(modes="avs", output="/dl"), "URL") == "yt all URL -o /dl"
-        assert command_line(Options(modes="as", output="/dl"), "URL") == "yt mp3 sub URL -o /dl"
-
-    def test_other_formats_use_the_plain_words(self):
-        line = command_line(Options(modes="av", output="/dl", audio_format="flac", video_format="mkv"), "URL")
-        assert line == "yt audio video URL --video-format mkv --audio-format flac -o /dl"
-
-    def test_only_settings_that_differ_from_the_defaults_are_spelled_out(self):
-        chosen = Options(
-            modes="avs",
-            output="/dl",
-            sub_langs=("ja", "en"),
-            sub_formats=("srt",),
-            auto_subs=False,
-            video_quality="1080",
-            audio_quality="192",
-        )
-        assert command_line(chosen, "URL") == (
-            "yt all URL -l ja,en -f srt --no-auto-subs --vq 1080 --aq 192 -o /dl"
-        )
-
-    def test_flags_of_modes_not_asked_for_are_left_out(self):
-        chosen = Options(modes="s", output="/dl", video_quality="720", audio_quality="64")
-        assert command_line(chosen, "URL") == "yt sub URL -o /dl"
-
-    def test_the_url_is_quoted_for_the_shell(self, monkeypatch):
-        monkeypatch.setattr(jobs_module.sys, "platform", "linux")
-        assert "'https://y/watch?v=a&t=1'" in command_line(Options(modes="a"), "https://y/watch?v=a&t=1")
-        monkeypatch.setattr(jobs_module.sys, "platform", "win32")
-        assert command_line(Options(modes="a", output="C:\\My Files"), "URL").endswith('-o "C:\\My Files"')

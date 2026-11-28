@@ -7,7 +7,6 @@ from ..download import download_all, list_subtitles
 from ..models import AppError
 from ..modes import describe_modes
 from ..settings import Options, config_path, format_config, save_config
-from ..utils import split_list
 from . import prompts
 from .args import apply_overrides, parse_args
 from .wizard import PromptCancelled, run_wizard
@@ -60,7 +59,7 @@ def run(args: argparse.Namespace) -> int:
             run_wizard(options)
         elif not options.urls and sys.stdin.isatty():
             # `yt mp3` already said what to get, so the URL is the only thing left to ask.
-            options.urls = list(split_list(prompts.required("YouTube URL(s)", input)))
+            options.urls = prompts.url_list("YouTube URL(s)", input)
     except (EOFError, KeyboardInterrupt):
         print()
         return 1

@@ -10,8 +10,9 @@ import pytest
 
 from ytcli.models import AppError, DownloadCancelled, DownloadResult, SubtitleTracks, VideoInfo
 from ytcli.settings import Options
+from ytcli.ui.web.app import App
 from ytcli.ui.web.jobs import JobManager
-from ytcli.ui.web.server import App, UiServer
+from ytcli.ui.web.server import UiServer, cookie_name
 
 PLAYLIST = "https://www.youtube.com/playlist?list=PL1"
 
@@ -32,12 +33,14 @@ class FakeDownloads:
     def __init__(self) -> None:
         self.calls: list[tuple[Options, str]] = []
         self.probed: list[str] = []
+        self.tracks: list[SubtitleTracks | None] = []
         self.hold = threading.Event()
         self.hold.set()  # clear it to keep a job "running" until the test lets go
         self.started = threading.Event()
 
-    def download(self, options, url, log, cancelled, notify):
+    def download(self, options, url, log, cancelled, notify, tracks=None):
         self.calls.append((options, url))
+        self.tracks.append(tracks)
         self.started.set()
         log(f"starting {url}")
         notify("stage", {"stage": "audio"})
@@ -52,16 +55,20 @@ class FakeDownloads:
         options.out_dir.mkdir(parents=True, exist_ok=True)
         target = options.out_dir / f"{url.rsplit('=', 1)[-1]}.mp3"
         target.write_bytes(b"x" * 2048)
-        notify("processing", {"stage": "audio"})
+        notify("processing", {})
         notify("saved", {"path": str(target)})
-        return DownloadResult(url=url, files=[target], warnings=["no ja subtitles"] if "warn" in url else [])
+        warnings = ["no ja subtitles"] if "warn" in url else []
+        for message in warnings:
+            notify("warning", {"message": message})
+        return DownloadResult(url=url, files=[target], warnings=warnings)
 
-    def probe(self, url, log=None, insecure=False):
+    def probe(self, url, insecure=False):
         self.probed.append(url)
         if "unknown" in url:
             raise AppError("Could not read video info: gone")
         if url == PLAYLIST:
-            return VideoInfo(url=url, title="Mix", entries=("https://y/watch?v=p1", "https://y/watch?v=p2"))
+            entries = tuple(VideoInfo(url=f"https://y/watch?v={id}", id=id, title=id) for id in ("p1", "p2"))
+            return VideoInfo(url=url, title="Mix", entries=entries)
         return VideoInfo(
             url=url,
             id="abcdefghijk",
@@ -91,7 +98,7 @@ class Client:
     def __init__(self, server: UiServer) -> None:
         self.server = server
         self.port = server.port
-        self.cookie = f"{server.cookie_name}={server.app.token}"
+        self.cookie = f"{cookie_name(self.port)}={server.app.token}"
 
     def request(self, method, path, body=None, cookie=True, headers=None):
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
@@ -119,9 +126,14 @@ class Client:
 
 
 @pytest.fixture
-def ui(tmp_path, manager):
+def ui_options(out_dir):
+    return Options(output=str(out_dir))
+
+
+@pytest.fixture
+def ui(ui_options, manager):
     """A real server on a free port, with the fake downloads behind it."""
-    app = App(Options(output=str(tmp_path / "out")), manager=manager)
+    app = App(ui_options, manager=manager)
     server = UiServer(("127.0.0.1", 0), app)
     thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
     thread.start()

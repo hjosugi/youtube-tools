@@ -1,4 +1,4 @@
-"""The URL loop both the CLI and the GUI run on."""
+"""The URL loop the command line runs on."""
 
 import pytest
 

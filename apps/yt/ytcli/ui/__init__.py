@@ -1,1 +1,1 @@
-"""The command line, the guided prompts and the desktop window."""
+"""The command line, the guided prompts and the local web UI."""

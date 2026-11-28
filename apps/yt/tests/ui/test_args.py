@@ -1,8 +1,10 @@
+import sys
+
 import pytest
 
 from ytcli.models import AppError
 from ytcli.settings import DEFAULTS, Options
-from ytcli.ui.args import apply_overrides, build_parser, epilog, parse_args
+from ytcli.ui.args import apply_overrides, build_parser, command_line, epilog, parse_args
 
 
 def resolve(argv, config=None) -> Options:
@@ -113,3 +115,42 @@ class TestWords:
         args = parse_args(["mp3", "--aq", "192", "URL1", "-o", "/tmp/dl", "URL2"])
         assert args.urls == ["URL1", "URL2"]
         assert (args.mode, args.audio_quality, args.output) == ("mp3", "192", "/tmp/dl")
+
+
+class TestCommandLine:
+    """The line shown under a job: the same download as a command."""
+
+    def test_words_for_the_usual_formats(self):
+        assert command_line(Options(modes="a", output="/dl"), "URL") == "yt mp3 URL -o /dl"
+        assert command_line(Options(modes="v", output="/dl"), "URL") == "yt mp4 URL -o /dl"
+        assert command_line(Options(modes="s", output="/dl"), "URL") == "yt sub URL -o /dl"
+        assert command_line(Options(modes="avs", output="/dl"), "URL") == "yt all URL -o /dl"
+        assert command_line(Options(modes="as", output="/dl"), "URL") == "yt mp3 sub URL -o /dl"
+
+    def test_other_formats_use_the_plain_words(self):
+        line = command_line(Options(modes="av", output="/dl", audio_format="flac", video_format="mkv"), "URL")
+        assert line == "yt audio video URL --video-format mkv --audio-format flac -o /dl"
+
+    def test_only_settings_that_differ_from_the_defaults_are_spelled_out(self):
+        chosen = Options(
+            modes="avs",
+            output="/dl",
+            sub_langs=("ja", "en"),
+            sub_formats=("srt",),
+            auto_subs=False,
+            video_quality="1080",
+            audio_quality="192",
+        )
+        assert command_line(chosen, "URL") == (
+            "yt all URL -l ja,en -f srt --no-auto-subs --vq 1080 --aq 192 -o /dl"
+        )
+
+    def test_flags_of_modes_not_asked_for_are_left_out(self):
+        chosen = Options(modes="s", output="/dl", video_quality="720", audio_quality="64")
+        assert command_line(chosen, "URL") == "yt sub URL -o /dl"
+
+    def test_the_url_is_quoted_for_the_shell(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        assert "'https://y/watch?v=a&t=1'" in command_line(Options(modes="a"), "https://y/watch?v=a&t=1")
+        monkeypatch.setattr(sys, "platform", "win32")
+        assert command_line(Options(modes="a", output="C:\\My Files"), "URL").endswith('-o "C:\\My Files"')

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 
 from .. import ffmpeg
@@ -21,7 +22,7 @@ def fetch_subtitles(job: Job) -> None:
     job.log(f"[subtitle] requested: {', '.join(options.sub_langs)}")
 
     try:
-        tracks = list_subtitles(job.url, insecure=options.insecure)
+        tracks = job.tracks or list_subtitles(job.url, insecure=options.insecure)
     except AppError as error:
         job.warn(str(error))
         return
@@ -45,7 +46,7 @@ def fetch_subtitles(job: Job) -> None:
         }
     )
     job.log(f"  downloading: {', '.join(codes)}")
-    if not run_stage(job, ydl_options, "subtitle"):
+    if not run_stage(job, "subtitle", lambda: run_download(ydl_options, job.url)):
         return
 
     sources = [path for path in files_in(work_dir) if path.suffix.lower() in SUBTITLE_SUFFIXES]
@@ -79,15 +80,13 @@ def fetch_media(job: Job, kind: str) -> None:
     ydl_options = job.ydl_options(work_dir, kind)
     ydl_options.update(media_options(job, kind))
 
-    try:
+    def fetch() -> None:
         location = prepare_ffmpeg(job)
-    except AppError as error:
-        job.warn(f"{kind} download failed: {error}")
-        return
-    if location:
-        ydl_options["ffmpeg_location"] = location
+        if location:
+            ydl_options["ffmpeg_location"] = location
+        run_download(ydl_options, job.url)
 
-    if not run_stage(job, ydl_options, kind):
+    if not run_stage(job, kind, fetch):
         return
 
     produced = files_in(work_dir)
@@ -106,7 +105,7 @@ def prepare_ffmpeg(job: Job) -> str | None:
     def progress(done: int, total: int) -> None:
         job.check_cancelled()
         if total:
-            job.tell("progress", stage="ffmpeg", percent=round(done * 100.0 / total, 1), total=total)
+            job.tell("progress", stage="ffmpeg", percent=round(done * 100.0 / total, 1))
 
     return ffmpeg.ensure(job.log, progress)
 
@@ -134,10 +133,10 @@ def media_options(job: Job, kind: str) -> dict:
     }
 
 
-def run_stage(job: Job, ydl_options: dict, kind: str) -> bool:
-    """Run one yt-dlp pass, turning any failure into a warning. True when it ran."""
+def run_stage(job: Job, kind: str, work: Callable[[], None]) -> bool:
+    """Run one stage's download, turning any failure into a warning. True when it ran."""
     try:
-        run_download(ydl_options, job.url)
+        work()
     except DownloadCancelled:
         raise
     except Exception as error:  # yt-dlp and ffmpeg raise a wide range of errors

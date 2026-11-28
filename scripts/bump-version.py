@@ -19,17 +19,17 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent / "apps" / "yt"
 
-# (file, text before the version, text after it)
+# (file, the text right before the quoted version)
 PLACES = (
-    (APP / "ytcli" / "__init__.py", '__version__ = "', '"'),
-    (APP / "pyproject.toml", '[project]\nname = "yt-tools"\nversion = "', '"'),
-    (APP / "uv.lock", '[[package]]\nname = "yt-tools"\nversion = "', '"'),
+    (APP / "ytcli" / "__init__.py", '__version__ = "'),
+    (APP / "pyproject.toml", '[project]\nname = "yt-tools"\nversion = "'),
+    (APP / "uv.lock", '[[package]]\nname = "yt-tools"\nversion = "'),
 )
 VERSION_RE = re.compile(r"\d+\.\d+\.\d+")
 
 
 def current_version() -> str:
-    path, before, _after = PLACES[0]
+    path, before = PLACES[0]
     found = re.search(re.escape(before) + f"({VERSION_RE.pattern})", path.read_text(encoding="utf-8"))
     if not found:
         raise SystemExit(f"error: no version found in {path}")
@@ -52,16 +52,18 @@ def next_version(current: str, request: str) -> str:
 def main() -> int:
     request = sys.argv[1] if len(sys.argv) > 1 else "patch"
     current = current_version()
-    if request == "--show":
-        print(current)
-        return 0
-    new = next_version(current, request)
-    for path, before, after in PLACES:
+    new = current if request == "--show" else next_version(current, request)
+    updates = {}
+    for path, before in PLACES:
         text = path.read_text(encoding="utf-8")
-        old = f"{before}{current}{after}"
+        old = f'{before}{current}"'
         if text.count(old) != 1:
             raise SystemExit(f"error: expected exactly one {current} version line in {path}")
-        path.write_text(text.replace(old, f"{before}{new}{after}"), encoding="utf-8", newline="\n")
+        if new != current:
+            updates[path] = text.replace(old, f'{before}{new}"')
+    # Check every file before changing any of them, so a mismatched lockfile is recoverable.
+    for path, updated in updates.items():
+        path.write_text(updated, encoding="utf-8", newline="\n")
     print(new)
     return 0
 

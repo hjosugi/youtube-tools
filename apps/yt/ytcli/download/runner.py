@@ -5,9 +5,9 @@ from collections.abc import Callable
 from functools import partial
 from pathlib import Path
 
-from ..models import AppError, DownloadResult, Notify
+from ..models import AppError, Cancelled, DownloadResult, Logger, Notify, SubtitleTracks, silent
 from ..settings import Options
-from .client import Cancelled, Logger, ensure_ca_bundle
+from .client import ensure_ca_bundle
 from .job import Job
 from .stages import fetch_media, fetch_subtitles
 
@@ -25,8 +25,12 @@ def download(
     log: Logger = print,
     cancelled: Cancelled | None = None,
     notify: Notify | None = None,
+    tracks: SubtitleTracks | None = None,
 ) -> DownloadResult:
-    """Download every requested mode for one URL into options.out_dir."""
+    """Download every requested mode for one URL into options.out_dir.
+
+    `tracks` saves a look-up when the caller already knows the video's subtitle languages.
+    """
     if not options.modes:
         raise AppError("Nothing to do: no mode selected.")
 
@@ -35,7 +39,7 @@ def download(
     options.out_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="yt-") as staging:
-        job = Job(options, url, Path(staging), result, log, cancelled, notify)
+        job = Job(options, url, Path(staging), result, log, cancelled, notify or silent, tracks)
         for letter, fetch in STAGES:
             if letter not in options.modes:
                 continue

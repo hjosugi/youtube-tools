@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-# Choice lists shared by the CLI flags, the GUI dropdowns and the config file.
+# Choice lists shared by the CLI flags, the web UI's dropdowns and the config file.
 VIDEO_QUALITIES = ("best", "2160", "1440", "1080", "720", "480", "360", "worst")
 AUDIO_QUALITIES = ("best", "320", "256", "192", "128", "96", "64")
 VIDEO_FORMATS = ("mp4", "mkv", "webm")
@@ -47,15 +47,22 @@ class VideoInfo:
     title: str = ""
     uploader: str = ""
     duration: int = 0
-    thumbnail: str = ""
     tracks: SubtitleTracks = SubtitleTracks()
-    # Filled only for playlists: the video URLs to download one by one.
-    entries: tuple[str, ...] = ()
+    # Filled only for playlists: the videos to download one by one, as far as the
+    # playlist page describes them (URL, id and title).
+    entries: tuple[VideoInfo, ...] = ()
 
 
-# Structured progress for a UI, next to the plain-text log: notify(kind, details).
-# Kinds: "stage", "progress", "processing", "saved", "warning".
+# The callbacks a download reports through. `Logger` gets the plain-text lines the command
+# line prints; `Notify` gets the same story in structured form for a UI to draw:
+# notify(kind, details) with kind "stage", "progress", "processing", "saved" or "warning".
+Logger = Callable[[str], None]
+Cancelled = Callable[[], bool]
 Notify = Callable[[str, dict], None]
+
+
+def silent(*_args) -> None:
+    """Discard log lines or progress events when the caller has no listener."""
 
 
 @dataclass

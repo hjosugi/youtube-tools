@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..models import DownloadCancelled, DownloadResult, Notify
+from ..models import Cancelled, DownloadCancelled, DownloadResult, Logger, Notify, SubtitleTracks, silent
 from ..settings import Options
-from .client import Cancelled, Logger, base_options, progress_hook
+from .client import base_options, progress_hook
 
 
 @dataclass
@@ -18,12 +18,13 @@ class Job:
     result: DownloadResult
     log: Logger
     cancelled: Cancelled | None = None
-    notify: Notify | None = None
+    notify: Notify = silent
+    # The subtitle languages of the video, when the caller has just looked them up.
+    tracks: SubtitleTracks | None = None
 
     def tell(self, kind: str, **details) -> None:
-        """Send a structured event to whoever is drawing progress, if anyone is."""
-        if self.notify is not None:
-            self.notify(kind, details)
+        """Send a structured event to whoever is drawing progress."""
+        self.notify(kind, details)
 
     def warn(self, message: str) -> None:
         """Record a non-fatal problem and show it to the user."""
@@ -44,11 +45,11 @@ class Job:
         return path
 
     def check_cancelled(self) -> None:
-        """Stop between stages when the GUI asked to."""
+        """Stop between stages when the user asked to."""
         if self.cancelled is not None and self.cancelled():
             raise DownloadCancelled("stopped by the user")
 
-    def ydl_options(self, out_dir: Path, stage: str = "") -> dict:
+    def ydl_options(self, out_dir: Path, stage: str) -> dict:
         """The yt-dlp options every stage shares."""
         return base_options(self.log, self.options.insecure) | {
             "outtmpl": str(out_dir / "%(title)s [%(id)s].%(ext)s"),

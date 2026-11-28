@@ -10,6 +10,7 @@ set -eu
 
 repo="hjosugi/youtube-tools"
 dir="${YT_INSTALL_DIR:-$HOME/.local/bin}"
+data="${XDG_DATA_HOME:-$HOME/.local/share}"
 
 case "$(uname -s)" in
     Linux) os=linux ;;
@@ -56,7 +57,7 @@ echo "Installed $("${dir}/yt" --version) to ${dir}/yt"
 
 # Linux: put yt in the application menu, so opening the UI needs no terminal at all.
 if [ "$os" = linux ]; then
-    apps="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+    apps="${data}/applications"
     mkdir -p "$apps"
     cat > "${apps}/yt.desktop" <<DESKTOP
 [Desktop Entry]
@@ -78,7 +79,7 @@ if [ -d "$HOME/.config/fish" ]; then
     curl -fsSL "${base}/yt.fish" -o "$HOME/.config/fish/completions/yt.fish" || true
 fi
 if command -v bash >/dev/null 2>&1; then
-    completions="${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion/completions"
+    completions="${data}/bash-completion/completions"
     mkdir -p "$completions"
     curl -fsSL "${base}/yt.bash" -o "${completions}/yt" || true
 fi

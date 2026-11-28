@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import shlex
+import subprocess
+import sys
 
 from .. import __version__
 from ..models import AUDIO_FORMATS, AUDIO_QUALITIES, VIDEO_FORMATS, VIDEO_QUALITIES
-from ..modes import MODE_ALIASES, parse_modes
-from ..settings import Options, config_path, validate_sub_formats
+from ..modes import ALL_MODES, MODE_ALIASES, parse_modes
+from ..settings import DEFAULTS, Options, config_path, validate_sub_formats
 from ..subtitles import SUBTITLE_FORMATS
 from ..utils import split_list
 
@@ -125,13 +128,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def absorb_words(args: argparse.Namespace) -> argparse.Namespace:
     """Turn `yt mp3 sub URL` into `yt URL -m mp3,sub`, and `yt ui` into `yt --gui`."""
-    words = [token.lower() for token in args.urls if token.lower() in MODE_WORDS | UI_WORDS]
-    args.urls = [token for token in args.urls if token.lower() not in MODE_WORDS | UI_WORDS]
-    modes = [word for word in words if word in MODE_WORDS]
+    urls: list[str] = []
+    modes: list[str] = [args.mode] if args.mode else []
+    for token in args.urls:
+        word = token.lower()
+        if word in MODE_WORDS:
+            modes.append(word)
+        elif word in UI_WORDS:
+            args.gui = True
+        else:
+            urls.append(token)
+    args.urls = urls
     if modes:
-        args.mode = ",".join(([args.mode] if args.mode else []) + modes)
-    if any(word in UI_WORDS for word in words):
-        args.gui = True
+        args.mode = ",".join(modes)
     return args
 
 
@@ -152,3 +161,42 @@ def apply_overrides(options: Options, args: argparse.Namespace) -> Options:
             setattr(options, name, value)
     options.insecure = args.insecure
     return options
+
+
+def command_line(options: Options, url: str) -> str:
+    """The `yt` command that downloads `url` with these options: the parser in reverse.
+
+    It spells out only what differs from the built-in defaults, plus the folder.
+    """
+    config = options.to_config()
+    modes = options.modes
+    if modes == ALL_MODES:
+        words = ["all"]
+    else:
+        names = {
+            "a": "mp3" if options.audio_format == "mp3" else "audio",
+            "v": "mp4" if options.video_format == "mp4" else "video",
+            "s": "sub",
+        }
+        words = [names[letter] for letter in modes]
+
+    flags: list[str] = []
+
+    def add(flag: str, key: str) -> None:
+        if config[key] != DEFAULTS[key]:
+            flags.extend([flag, config[key]])
+
+    if "s" in modes:
+        add("-l", "sub_langs")
+        add("-f", "sub_formats")
+        if not options.auto_subs:
+            flags.append("--no-auto-subs")
+    if "v" in modes:
+        add("--vq", "video_quality")
+        add("--video-format", "video_format")
+    if "a" in modes:
+        add("--aq", "audio_quality")
+        add("--audio-format", "audio_format")
+
+    argv = ["yt", *words, url, *flags, "-o", config["output"]]
+    return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)

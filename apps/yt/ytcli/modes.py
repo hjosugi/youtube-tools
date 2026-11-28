@@ -25,8 +25,6 @@ def parse_modes(value: str) -> str:
     text = (value or "").strip().lower()
     if not text:
         raise AppError("No mode given. Use -m with any of a (audio), v (video), s (subtitle).")
-    if text == "all":
-        return ALL_MODES
 
     letters: set[str] = set()
     for token in (part.strip() for part in text.replace("+", ",").split(",") if part.strip()):
