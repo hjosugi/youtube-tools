@@ -82,13 +82,15 @@ class TestNotify:
         events, hook = self.collect()
         hook({"status": "downloading", "total_bytes": 200, "downloaded_bytes": 50, "speed": 10, "eta": 15})
         hook({"status": "downloading", "total_bytes": 200, "downloaded_bytes": 52})
-        assert [kind for kind, _details in events] == ["progress", "progress"]
-        assert events[0][1] == {"stage": "audio", "percent": 25.0, "total": 200, "speed": 10, "eta": 15}
+        assert events == [
+            ("progress", {"stage": "audio", "percent": 25.0}),
+            ("progress", {"stage": "audio", "percent": 26.0}),
+        ]
 
     def test_the_end_of_a_transfer_means_converting(self):
         events, hook = self.collect()
         hook({"status": "finished"})
-        assert events == [("processing", {"stage": "audio"})]
+        assert events == [("processing", {})]
 
     def test_an_estimate_never_passes_one_hundred_percent(self):
         events, hook = self.collect()
@@ -144,7 +146,6 @@ def test_probe_reads_what_the_ui_shows(monkeypatch):
             "title": "A talk",
             "channel": "Someone",
             "duration": 61.4,
-            "thumbnail": "https://i.ytimg.com/vi/abc/hq.jpg",
             "subtitles": {"ja": [], "en": []},
             "automatic_captions": {"en": []},
         },
@@ -155,16 +156,28 @@ def test_probe_reads_what_the_ui_shows(monkeypatch):
         title="A talk",
         uploader="Someone",
         duration=61,
-        thumbnail="https://i.ytimg.com/vi/abc/hq.jpg",
         tracks=SubtitleTracks(manual=("en", "ja"), automatic=("en",)),
     )
 
 
 def test_probe_lists_the_videos_of_a_playlist(monkeypatch):
-    info = {"title": "Mix", "entries": [{"url": "u1"}, {"webpage_url": "u2"}, {"id": "no-url"}, None]}
-    monkeypatch.setattr(client, "extract_info", lambda *args, **kwargs: info)
-    assert client.probe("LIST").entries == ("u1", "u2")
+    entries = [{"url": "u1", "id": "a", "title": "One"}, {"webpage_url": "u2"}, {"id": "no-url"}, None]
+    monkeypatch.setattr(client, "extract_info", lambda *args, **kwargs: {"title": "Mix", "entries": entries})
+    assert client.probe("LIST").entries == (VideoInfo(url="u1", id="a", title="One"), VideoInfo(url="u2"))
     assert client.list_subtitles("LIST") == SubtitleTracks()
+
+
+def test_a_positional_log_callback_keeps_certificate_checks_enabled(monkeypatch):
+    messages = []
+
+    def extract(url, log, insecure):
+        assert insecure is False
+        log(url)
+        return {"subtitles": {"en": []}}
+
+    monkeypatch.setattr(client, "extract_info", extract)
+    assert client.list_subtitles("URL", messages.append).manual == ("en",)
+    assert messages == ["URL"]
 
 
 def test_a_playlist_expands_and_anything_else_is_left_alone(monkeypatch):
@@ -172,7 +185,7 @@ def test_a_playlist_expands_and_anything_else_is_left_alone(monkeypatch):
 
     def probe(url, log=None, insecure=False):
         asked.append(url)
-        return VideoInfo(url=url, entries=("u1", "u2"))
+        return VideoInfo(url=url, entries=(VideoInfo(url="u1"), VideoInfo(url="u2")))
 
     monkeypatch.setattr(client, "probe", probe)
     assert client.expand_playlist("https://www.youtube.com/watch?v=abc") == [

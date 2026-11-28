@@ -1,9 +1,8 @@
 """Everything that talks to yt-dlp."""
 
+from ..models import Cancelled, Logger
 from .batch import BatchReport, download_all
 from .client import (
-    Cancelled,
-    Logger,
     ensure_ca_bundle,
     expand_playlist,
     is_playlist_url,

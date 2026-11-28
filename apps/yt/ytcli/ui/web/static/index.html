@@ -65,7 +65,7 @@
         <div class="grid">
           <label for="set-langs" data-t="sLangs"></label>
           <div>
-            <input id="set-langs" type="text" data-key="sub_langs" spellcheck="false" autocomplete="off">
+            <input id="set-langs" type="text" spellcheck="false" autocomplete="off">
             <div id="langChips" class="chips"></div>
             <small class="muted" data-t="sLangsHelp"></small>
           </div>
@@ -74,18 +74,18 @@
           <div id="set-formats" class="checks"></div>
 
           <span></span>
-          <label class="check"><input id="set-auto" type="checkbox" data-key="auto_subs"><span data-t="autoSubs"></span></label>
+          <label class="check"><input id="set-auto" type="checkbox"><span data-t="autoSubs"></span></label>
 
           <label for="set-vq" data-t="vQuality"></label>
           <div class="pair">
-            <select id="set-vq" data-key="video_quality"></select>
-            <select id="set-vf" data-key="video_format" data-t-label="vFormat"></select>
+            <select id="set-vq"></select>
+            <select id="set-vf" data-t-label="vFormat"></select>
           </div>
 
           <label for="set-aq" data-t="aQuality"></label>
           <div class="pair">
-            <select id="set-aq" data-key="audio_quality"></select>
-            <select id="set-af" data-key="audio_format" data-t-label="aFormat"></select>
+            <select id="set-aq"></select>
+            <select id="set-af" data-t-label="aFormat"></select>
           </div>
         </div>
         <small class="muted" data-t="autoSaved"></small>
@@ -110,7 +110,7 @@
       <p id="folderError" class="error"></p>
       <div class="dialog-buttons">
         <button class="ghost" value="cancel" data-t="cancel"></button>
-        <button id="folderUse" class="primary" value="use" data-t="useThis"></button>
+        <button class="primary" value="use" data-t="useThis"></button>
       </div>
     </form>
   </dialog>

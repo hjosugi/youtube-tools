@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from ytcli.download import download, stages
+from ytcli.download.client import silent
 from ytcli.download.job import Job
 from ytcli.models import AppError, DownloadCancelled, DownloadResult, SubtitleTracks
 from ytcli.settings import Options
@@ -271,7 +272,7 @@ class TestPrepareFfmpeg:
             DownloadResult(url="URL"),
             lambda _line: None,
             cancelled,
-            (lambda kind, details: events.append((kind, details))) if events is not None else None,
+            (lambda kind, details: events.append((kind, details))) if events is not None else silent,
         )
 
     def test_download_progress_becomes_a_stage_of_its_own(self, tmp_path, monkeypatch):
@@ -283,9 +284,27 @@ class TestPrepareFfmpeg:
         monkeypatch.setattr(stages.ffmpeg, "ensure", ensure)
         events: list = []
         assert real_prepare_ffmpeg(self.job(tmp_path, events=events)) == "/cache/ffmpeg"
-        assert events == [("progress", {"stage": "ffmpeg", "percent": 25.0, "total": 200})]
+        assert events == [("progress", {"stage": "ffmpeg", "percent": 25.0})]
 
     def test_stop_also_stops_the_ffmpeg_download(self, tmp_path, monkeypatch):
         monkeypatch.setattr(stages.ffmpeg, "ensure", lambda log, progress: progress(1, 2))
         with pytest.raises(DownloadCancelled):
             real_prepare_ffmpeg(self.job(tmp_path, cancelled=lambda: True))
+
+
+def test_stopping_while_ffmpeg_is_fetched_stops_the_job(tmp_path, fake, monkeypatch):
+    def stopped(job):
+        raise DownloadCancelled("stopped by the user")
+
+    monkeypatch.setattr(stages, "prepare_ffmpeg", stopped)
+    fake.produce = {"audio": [AUDIO_FILE]}
+    with pytest.raises(DownloadCancelled):
+        download(options(tmp_path, modes="a"), "URL", log=lambda _line: None)
+
+
+def test_known_subtitle_languages_save_the_lookup(tmp_path, fake):
+    fake.produce = {"subs": [SUB_FILE]}
+    download(options(tmp_path, modes="s"), "URL", log=lambda _line: None, tracks=SubtitleTracks(("en",), ()))
+    assert fake.lookups == 0
+    download(options(tmp_path, modes="s"), "URL", log=lambda _line: None)
+    assert fake.lookups == 1

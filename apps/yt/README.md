@@ -28,7 +28,7 @@ irm https://raw.githubusercontent.com/hjosugi/youtube-tools/main/install.ps1 | i
 
 The installer puts `yt` in `~/.local/bin` (Windows: `%LOCALAPPDATA%\Programs\yt`), checks the
 download against the release's `SHA256SUMS`, adds a **yt** entry to the application menu on
-Linux and Windows, and installs the fish and bash completions. Run it again to update.
+Linux and Windows. It also installs completions for the available shells. Run it again to update.
 `YT_INSTALL_DIR` and `YT_VERSION` (for example `v1.1.0`) change where and what it installs.
 
 Or download the file yourself from [Releases](https://github.com/hjosugi/youtube-tools/releases):
@@ -101,7 +101,7 @@ browser therefore cannot drive it.
 ## The command line
 
 ```bash
-yt [mp3|mp4|sub|all] URL... [options]
+yt [a|v|s|av|mp3|mp4|sub|all] URL... [options]
 ```
 
 ### What to download
@@ -115,9 +115,7 @@ yt mp3 sub URL     # words combine
 yt URL             # whatever the saved default is (subtitles out of the box)
 ```
 
-`-m` says the same with letters, `a` (audio), `v` (video) and `s` (subtitle): `-m avs`,
-`-m av`, `-m all`. Words, URLs and options may come in any order. `yt mp3` without a URL
-asks for one.
+Use one letter for audio (`yt a URL`), video (`yt v URL`) or subtitles (`yt s URL`). Combine them as `av`, `as`, `vs` or `avs`. The same letters work with `-m`. Words, URLs and options may come in any order. In a terminal, `yt mp3` without a URL asks for one.
 
 ### Subtitles
 
@@ -221,26 +219,22 @@ Asks for each option in turn and shows a summary before starting.
 | `--save-config` | Store the current options as defaults |
 | `--show-config` | Print the effective defaults |
 | `--config-path` | Print the config file location |
+| `-c`, `--completion SHELL` | Print the completion script for `bash`, `zsh`, `fish`, `pwsh` or `powershell` |
 | `--insecure` | Skip TLS certificate verification (last resort) |
 | `--version` | Print the version |
 
 ## Shell completion
 
-The installer sets up fish and bash. By hand, from `completions/`:
+Type `yt ` and press Tab to see the actions. After `yt v --vq `, Tab offers video qualities. Each binary and Python install includes the four completion scripts. To enable one in the current shell, run the matching line.
 
-```bash
-# bash
-cp completions/yt.bash ~/.local/share/bash-completion/completions/yt
+| Shell | Enable completion |
+| --- | --- |
+| Bash | `source <(yt -c bash)` |
+| Zsh | After `autoload -Uz compinit && compinit`, run `source <(yt -c zsh)` |
+| fish | `yt -c fish \| source` |
+| PowerShell | `yt -c pwsh \| Out-String \| Invoke-Expression` |
 
-# zsh  (any directory on $fpath)
-cp completions/yt.zsh ~/.zsh/completions/_yt
-
-# fish
-cp completions/yt.fish ~/.config/fish/completions/yt.fish
-
-# PowerShell
-Add-Content $PROFILE ". path\to\completions\yt.ps1"
-```
+On Linux and macOS the installer writes to the bash-completion and fish user directories when those shells are installed. For Zsh, add `fpath=("${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions" $fpath)` above `compinit` in `~/.zshrc`. The Windows installer enables completion in the current PowerShell session and prints the line to add to `$PROFILE` for future sessions.
 
 ## Development
 

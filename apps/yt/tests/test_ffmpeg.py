@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from ytcli import ffmpeg
-from ytcli.models import AppError
+from ytcli.models import AppError, DownloadCancelled
 
 # Taken before the autouse fixture swaps it for a function that refuses to download.
 real_fetch = ffmpeg.fetch
@@ -72,6 +72,17 @@ def test_the_download_reports_progress(no_system_ffmpeg, fake_fetch):
     seen: list[tuple[int, int]] = []
     ffmpeg.ensure(progress=lambda done, total: seen.append((done, total)))
     assert seen and seen[-1][0] == seen[-1][1]
+
+
+def test_cancelled_fetch_can_be_retried(no_system_ffmpeg, fake_fetch):
+    def stop(_done, _total):
+        raise DownloadCancelled("stopped by the user")
+
+    with pytest.raises(DownloadCancelled):
+        ffmpeg.ensure(progress=stop)
+    assert list(ffmpeg.cached_path().parent.iterdir()) == []
+    assert Path(ffmpeg.ensure()).read_bytes() == BINARY
+    assert len(fake_fetch) == 2
 
 
 def test_the_wheel_matches_this_platform(no_system_ffmpeg, fake_fetch):

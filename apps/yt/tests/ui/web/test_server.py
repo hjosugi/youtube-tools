@@ -6,8 +6,9 @@ from urllib.parse import quote
 
 import pytest
 
-from ytcli.settings import load_config
+from ytcli.settings import Options, load_config
 from ytcli.ui.web import server as server_module
+from ytcli.ui.web import system
 
 from .conftest import PLAYLIST, wait_until
 
@@ -36,7 +37,7 @@ class TestDoor:
         assert b"yt" in body  # the page says how to get back in
 
     def test_a_wrong_cookie_is_refused(self, ui):
-        assert ui.get("/api/state", cookie=f"{ui.server.cookie_name}=guess")[0] == 403
+        assert ui.get("/api/state", cookie=f"{server_module.cookie_name(ui.port)}=guess")[0] == 403
 
     def test_the_secret_in_the_link_does_not_unlock_the_api(self, ui):
         assert ui.get(f"/api/state?k={ui.server.app.token}", cookie=False)[0] == 403
@@ -140,23 +141,33 @@ class TestFolderDefault:
     """Downloads is only the UI's stand-in for "not set": the CLI keeps its own default."""
 
     @pytest.fixture
-    def app(self, ui):
-        ui.server.app.folder_is_default = True
-        return ui.server.app
+    def ui_options(self, out_dir, monkeypatch):
+        monkeypatch.setattr(system, "downloads_dir", lambda: out_dir)
+        return Options()
 
-    def test_using_the_ui_does_not_move_the_command_line_default(self, ui, app, manager):
-        ui.post("/api/jobs", {"urls": [URL], "mode": "a"})
-        ui.post("/api/settings", {"video_quality": "720"})
+    def test_using_the_ui_does_not_move_the_command_line_default(self, ui, manager, out_dir):
+        status, state = ui.get("/api/state")
+        assert status == 200 and state["folder"] == state["options"]["output"] == str(out_dir)
+        assert ui.post("/api/jobs", {"urls": [URL], "mode": "a"})[0] == 200
+        wait_until(lambda: not manager.active())
+        assert (out_dir / "one.mp3").is_file()
+        assert ui.post("/api/settings", {"video_quality": "720"})[0] == 200
         assert load_config({"output": "", "mode": "", "video_quality": ""}) == {
             "output": ".",
             "mode": "a",
             "video_quality": "720",
         }
 
-    def test_choosing_a_folder_in_the_page_is_remembered(self, ui, app, tmp_path):
+    def test_choosing_a_folder_in_the_page_is_remembered(self, ui, tmp_path):
         ui.post("/api/settings", {"output": str(tmp_path / "music")})
         ui.post("/api/settings", {"video_quality": "720"})
         assert load_config({"output": ""}) == {"output": str(tmp_path / "music")}
+
+    def test_explicit_current_folder_is_remembered(self, ui, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)
+        status, state = ui.post("/api/settings", {"output": "."})
+        assert status == 200 and state["folder"] == str(tmp_path)
+        assert Options.load().output == str(tmp_path)
 
 
 class TestDownloading:
@@ -243,7 +254,7 @@ class TestDownloading:
             return json.loads(data.removeprefix(b"data: "))
 
         assert next_event() == {"jobs": []}
-        wait_until(lambda: ui.server.app._clients == 1)
+        wait_until(lambda: ui.server.app.tabs_open == 1)
 
         ui.post("/api/jobs", {"urls": [URL], "mode": "a"})
         seen = next_event()["jobs"]
@@ -253,10 +264,23 @@ class TestDownloading:
 
         connection.close()
         ui.server.app.stop.set()  # ends the stream loop, as closing the tab does on its next write
-        wait_until(lambda: ui.server.app._clients == 0)
+        wait_until(lambda: ui.server.app.tabs_open == 0)
 
 
 class TestDesktop:
+    def test_a_browser_can_clear_then_quit_on_the_same_connection(self, ui):
+        connection = http.client.HTTPConnection("127.0.0.1", ui.port, timeout=5)
+        headers = {"Cookie": ui.cookie, "Content-Type": "application/json"}
+        try:
+            for path in ("/api/jobs/1/cancel", "/api/jobs/clear", "/api/quit"):
+                connection.request("POST", path, body="{}", headers=headers)
+                response = connection.getresponse()
+                assert response.status == 200, path
+                response.read()
+            assert ui.server.app.stop.wait(1)
+        finally:
+            connection.close()
+
     def test_opening_the_output_folder_creates_it_first(self, ui, desktop, out_dir):
         assert ui.post("/api/open") == (200, {"ok": True})
         assert desktop["paths"] == [out_dir]

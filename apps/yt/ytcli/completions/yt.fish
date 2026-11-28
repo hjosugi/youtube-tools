@@ -1,13 +1,16 @@
-# fish completion for yt
-# install: cp yt.fish ~/.config/fish/completions/yt.fish
+# Fish completion for yt. To enable now: yt -c fish | source
 
 complete -c yt -f
-complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a mp3 -d "Audio as MP3"
-complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a mp4 -d "Video as MP4"
-complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a sub -d "Subtitles"
-complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a all -d "Audio, video and subtitles"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a "a mp3" -d "Audio"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a "v mp4" -d "Video"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a "s sub" -d "Subtitles"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a av -d "Audio and video"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a as -d "Audio and subtitles"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a vs -d "Video and subtitles"
+complete -c yt -n "not __fish_seen_subcommand_from ui gui" -a "avs all" -d "Audio, video and subtitles"
 complete -c yt -n "__fish_is_first_arg" -a ui -d "Open the local web UI (same as plain yt)"
 complete -c yt -s h -l help -d "Show help"
+complete -c yt -s c -l completion -x -a "bash zsh fish pwsh powershell" -d "Print a completion script"
 complete -c yt -s m -l mode -x -a "a v s av as vs avs all" -d "What to download (a/v/s)"
 complete -c yt -s l -l lang -x -a "en ja en,ja all" -d "Subtitle languages"
 complete -c yt -s f -l sub-format -x -a "srt vtt tsv txt md srt,tsv" -d "Subtitle output formats"
@@ -16,7 +19,7 @@ complete -c yt -l vq -l video-quality -x -a "best 2160 1440 1080 720 480 360 wor
 complete -c yt -l video-format -x -a "mp4 mkv webm" -d "Video container"
 complete -c yt -l aq -l audio-quality -x -a "best 320 256 192 128 96 64" -d "Audio bitrate (kbps)"
 complete -c yt -l audio-format -x -a "mp3 m4a opus flac wav" -d "Audio codec"
-complete -c yt -s o -l output -r -F -d "Output directory"
+complete -c yt -s o -l output -x -a "(__fish_complete_directories)" -d "Output directory"
 complete -c yt -s i -l interactive -d "Guided terminal setup"
 complete -c yt -s g -l gui -l ui -d "Open the local web UI"
 complete -c yt -l port -x -d "Port for the web UI"

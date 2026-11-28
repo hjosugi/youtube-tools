@@ -59,6 +59,8 @@ yt sub URL -l en,ja        # 英語と日本語の字幕
 yt mp4 URL --vq 1080       # 動画を 1080p までに制限
 ```
 
+音声は `yt a URL`、動画は `yt v URL`、字幕は `yt s URL` と1文字でも指定できます。`yt av URL` なら音声と動画の両方です。[Bash・Zsh・fish・PowerShell の補完設定](apps/yt/README.ja.md#シェル補完)
+
 すべてのオプションは [`apps/yt/README.ja.md`](apps/yt/README.ja.md) にあります。
 
 ## 更新は自動です

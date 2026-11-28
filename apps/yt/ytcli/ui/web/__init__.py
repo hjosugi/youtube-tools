@@ -12,14 +12,14 @@ import secrets
 import threading
 import urllib.request
 from collections.abc import Callable
-from dataclasses import replace
 from pathlib import Path
 
 from ... import __version__
 from ...models import AppError
-from ...settings import DEFAULTS, Options, config_path
+from ...settings import Options, config_path
 from . import system
-from .server import HOST, App, UiServer
+from .app import App
+from .server import HOST, UiServer, cookie_name, start_url
 
 __all__ = ["run_ui"]
 
@@ -49,12 +49,7 @@ def run_ui(
             system.open_browser(running)
         return 0
 
-    app = App(
-        for_the_ui(options),
-        token=session["token"],
-        linger=linger,
-        folder_is_default=options.output == DEFAULTS["output"],
-    )
+    app = App(options, token=session["token"], linger=linger)
     server = bind(app, port)
     save_session({"token": app.token, "port": server.port})
     url = start_url(server.port, app.token)
@@ -89,13 +84,6 @@ def say(line: str) -> None:
     print(line, flush=True)
 
 
-def for_the_ui(options: Options) -> Options:
-    """A window has no 'current directory', so the unset default becomes Downloads."""
-    if options.output == DEFAULTS["output"]:
-        return replace(options, output=str(system.downloads_dir()))
-    return options
-
-
 def bind(app: App, port: int | None) -> UiServer:
     """Listen on the requested port, or on our usual one, or on any free one."""
     if port is not None:
@@ -107,10 +95,6 @@ def bind(app: App, port: int | None) -> UiServer:
         return UiServer((HOST, DEFAULT_PORT), app)
     except OSError:
         return UiServer((HOST, 0), app)
-
-
-def start_url(port: int, token: str) -> str:
-    return f"http://{HOST}:{port}/?k={token}"
 
 
 # ---- the session file: one secret per user, and where a running server listens ----------
@@ -150,7 +134,7 @@ def running_url(session: dict) -> str | None:
     if not port:
         return None
     request = urllib.request.Request(
-        f"http://{HOST}:{port}/api/ping", headers={"Cookie": f"yt_{port}={session['token']}"}
+        f"http://{HOST}:{port}/api/ping", headers={"Cookie": f"{cookie_name(port)}={session['token']}"}
     )
     # No proxies: an http_proxy setting must never see a request meant for this machine.
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))

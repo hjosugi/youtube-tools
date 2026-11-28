@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..models import AppError, DownloadCancelled
+from ..models import AppError, Cancelled, DownloadCancelled, Logger
 from ..settings import Options
-from .client import Cancelled, Logger, expand_playlist
+from .client import expand_playlist
 from .runner import download
 
 
@@ -28,7 +28,7 @@ def download_all(
     cancelled: Cancelled | None = None,
 ) -> BatchReport:
     """Download every URL in turn, so one failure never stops the rest of the list."""
-    # The CLI sends failures to stderr; the GUI has only the one log pane.
+    # The command line sends failures to stderr; other callers may have only the one log.
     report_error = report_error or log
     report = BatchReport()
 

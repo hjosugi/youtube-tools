@@ -49,7 +49,6 @@ const TEXT = {
     done: "Done",
     failed: "Failed",
     cancelled: "Stopped",
-    stopping: "Stopping…",
     checking: "Looking the video up…",
     noUrl: "Paste a YouTube URL first.",
     notUrl: "That does not look like a URL.",
@@ -115,7 +114,6 @@ const TEXT = {
     done: "完了",
     failed: "失敗",
     cancelled: "中止しました",
-    stopping: "中止しています…",
     checking: "動画を確認中…",
     noUrl: "先に YouTube の URL を貼り付けてください。",
     notUrl: "URL ではないようです。",
@@ -147,6 +145,16 @@ const STAGE_KEYS = {
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+const isBusy = (job) => job.status === "queued" || job.status === "running";
+
+function button(className, text, onClick) {
+  const element = document.createElement("button");
+  element.type = "button";
+  element.className = className;
+  element.textContent = text;
+  element.addEventListener("click", onClick);
+  return element;
+}
 
 let language = remembered("yt.language") || ((navigator.language || "en").toLowerCase().startsWith("ja") ? "ja" : "en");
 let state = null; // the server's settings, as last reported
@@ -204,6 +212,7 @@ let lookupTimer = 0;
 let lookupTicket = 0;
 
 function urlsChanged() {
+  const ticket = ++lookupTicket;
   fitUrlBox();
   clearTimeout(lookupTimer);
   const urls = typedUrls();
@@ -214,14 +223,13 @@ function urlsChanged() {
   if (urls.length > 1) return hint(t("manyUrls", { n: urls.length }));
   if (info && info.url === urls[0]) return;
   hint(t("checking"));
-  lookupTimer = setTimeout(() => lookUp(urls[0]), 350);
+  lookupTimer = setTimeout(() => lookUp(urls[0], ticket), 350);
 }
 
-async function lookUp(url) {
-  const ticket = ++lookupTicket;
+async function lookUp(url, ticket) {
   try {
     const found = await api("/api/info", { url });
-    if (ticket !== lookupTicket || typedUrls()[0] !== url) return;
+    if (ticket !== lookupTicket) return;
     showInfo(found);
     hint(found.playlist ? t("playlist", { n: found.playlist }) : "");
   } catch (error) {
@@ -295,7 +303,6 @@ async function go(mode) {
     await api("/api/jobs", { urls, mode });
     state.options.mode = mode;
     setUrls("");
-    hint("");
     drawActions();
   } catch (error) {
     hint(error.message, true);
@@ -375,17 +382,13 @@ function drawLanguageChips() {
   const wanted = listOf($("#set-langs").value);
   const codes = [...new Set([...info.manual, ...info.automatic])].slice(0, 40);
   holder.replaceChildren(...codes.map((code) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.classList.toggle("on", wanted.includes(code));
-    chip.classList.toggle("auto", !info.manual.includes(code));
-    chip.textContent = code;
-    chip.addEventListener("click", () => {
+    const chip = button("chip", code, () => {
       const next = wanted.includes(code) ? wanted.filter((item) => item !== code) : [...wanted, code];
       $("#set-langs").value = next.join(",");
       saveSettings();
     });
+    chip.classList.toggle("on", wanted.includes(code));
+    chip.classList.toggle("auto", !info.manual.includes(code));
     return chip;
   }));
 }
@@ -436,14 +439,9 @@ async function showFolder(path) {
   }
   $("#folderPath").value = listing.path;
 
-  $("#folderShortcuts").replaceChildren(...listing.shortcuts.map((place) => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.textContent = place.name;
-    chip.addEventListener("click", () => showFolder(place.path));
-    return chip;
-  }));
+  $("#folderShortcuts").replaceChildren(
+    ...listing.shortcuts.map((place) => button("chip", place.name, () => showFolder(place.path))),
+  );
 
   const rows = [];
   if (listing.parent) rows.push(folderRow(t("parent"), listing.parent));
@@ -459,11 +457,7 @@ async function showFolder(path) {
 
 function folderRow(name, path) {
   const item = document.createElement("li");
-  const button = document.createElement("button");
-  button.type = "button";
-  button.textContent = name;
-  button.addEventListener("click", () => showFolder(path));
-  item.append(button);
+  item.append(button("", name, () => showFolder(path)));
   return item;
 }
 
@@ -490,13 +484,18 @@ function drawJobs() {
       list.prepend(element); // newest on top
     }
     known.delete(job.id);
-    drawJob(element, job);
+    // The whole list arrives on every change; only redraw the rows that did change.
+    const drawn = JSON.stringify(job);
+    if (element.dataset.drawn !== drawn) {
+      element.dataset.drawn = drawn;
+      drawJob(element, job);
+    }
   }
   for (const gone of known.values()) gone.remove();
 
-  const busy = jobs.filter((job) => job.status === "queued" || job.status === "running").length;
+  const busy = jobs.filter(isBusy).length;
   document.title = busy ? `(${busy}) yt` : "yt";
-  $("#clear").hidden = !jobs.some((job) => !["queued", "running"].includes(job.status));
+  $("#clear").hidden = jobs.every(isBusy);
 }
 
 function wireJob(element) {
@@ -523,18 +522,14 @@ function drawJob(element, job) {
   }));
 
   const bar = $("progress", element);
-  if (job.percent === null || job.processing) bar.removeAttribute("value"); else bar.value = job.percent;
+  if (job.percent === null) bar.removeAttribute("value"); else bar.value = job.percent;
   $(".jtext", element).textContent = statusText(job);
 
   const files = $(".jfiles", element);
   if (files.childElementCount !== job.files.length) {
     files.replaceChildren(...job.files.map((file, index) => {
       const item = document.createElement("li");
-      const link = document.createElement("button");
-      link.type = "button";
-      link.className = "link";
-      link.textContent = file.name;
-      link.addEventListener("click", () => openPath({ job: job.id, file: index }));
+      const link = button("link", file.name, () => openPath({ job: job.id, file: index }));
       const size = document.createElement("span");
       size.className = "size";
       size.textContent = megabytes(file.size);
@@ -545,7 +540,7 @@ function drawJob(element, job) {
 
   $(".jnote", element).textContent = [job.error, ...(job.status === "failed" ? [] : job.warnings)].filter(Boolean).join("\n");
   $(".cmd", element).textContent = job.command;
-  $(".cancel", element).hidden = !["queued", "running"].includes(job.status);
+  $(".cancel", element).hidden = !isBusy(job);
   $(".show", element).hidden = !job.files.length;
   refreshLog(element, job);
 }

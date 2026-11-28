@@ -86,18 +86,20 @@ jobs:
           merge-multiple: true
 
       - name: Write checksums
-        run: cd artifacts && sha256sum yt-* > SHA256SUMS && cat SHA256SUMS
+        run: |
+          cp apps/yt/ytcli/completions/yt.* artifacts/
+          cd artifacts
+          sha256sum yt-* yt.* > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
           files: |
             artifacts/yt-*
+            artifacts/yt.*
             artifacts/SHA256SUMS
-            apps/yt/completions/yt.bash
-            apps/yt/completions/yt.zsh
-            apps/yt/completions/yt.fish
-            apps/yt/completions/yt.ps1
+          fail_on_unmatched_files: true
           generate_release_notes: true
           draft: false
           prerelease: false
@@ -125,6 +127,14 @@ jobs:
         run: |
           YT_VERSION="${GITHUB_REF_NAME}" sh install.sh
           "$HOME/.local/bin/yt" --version
+          bash_dirs="${BASH_COMPLETION_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/bash-completion}"
+          cmp "${bash_dirs%%:*}/completions/yt" apps/yt/ytcli/completions/yt.bash
+          if command -v zsh >/dev/null; then
+            cmp "${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions/_yt" apps/yt/ytcli/completions/yt.zsh
+          fi
+          if command -v fish >/dev/null; then
+            cmp "${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/yt.fish" apps/yt/ytcli/completions/yt.fish
+          fi
 
       - name: Install (Windows)
         if: runner.os == 'Windows'
@@ -133,3 +143,8 @@ jobs:
           $env:YT_VERSION = $env:GITHUB_REF_NAME
           ./install.ps1
           & "$env:LOCALAPPDATA\Programs\yt\yt.exe" --version
+          . "$env:LOCALAPPDATA\Programs\yt\completions\yt.ps1"
+          $line = 'yt -c '
+          if ('pwsh' -notin (TabExpansion2 $line $line.Length).CompletionMatches.CompletionText) {
+            throw 'Installed PowerShell completion did not offer pwsh'
+          }

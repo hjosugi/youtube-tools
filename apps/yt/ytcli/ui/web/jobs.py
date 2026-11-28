@@ -4,23 +4,30 @@ from __future__ import annotations
 
 import itertools
 import queue
-import shlex
-import subprocess
-import sys
 import threading
 from collections import deque
 from collections.abc import Callable
+from concurrent.futures import Future
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from pathlib import Path
 
 from ...download import download, is_playlist_url, probe
 from ...models import AppError, DownloadCancelled, VideoInfo
-from ...modes import ALL_MODES
-from ...settings import DEFAULTS, Options
+from ...settings import Options
+from ..args import command_line
 
 LOG_LINES = 400
 INFO_CACHE_SIZE = 64
 FINISHED = ("done", "failed", "cancelled")
+
+
+@dataclass(frozen=True)
+class SavedFile:
+    """A finished file and its size, measured once when it was saved."""
+
+    path: Path
+    size: int
 
 
 @dataclass
@@ -30,13 +37,14 @@ class UiJob:
     id: str
     url: str
     options: Options
+    command: str  # the same download as a `yt` command, shown under the job
     title: str = ""
     video_id: str = ""
     status: str = "queued"  # queued, running, done, failed or cancelled
     stage: str = ""  # subtitle, audio, video, ffmpeg or playlist
     percent: float | None = None
     processing: bool = False
-    files: list[Path] = field(default_factory=list)
+    files: list[SavedFile] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     error: str = ""
     log: deque[str] = field(default_factory=lambda: deque(maxlen=LOG_LINES))
@@ -46,6 +54,10 @@ class UiJob:
     @property
     def finished(self) -> bool:
         return self.status in FINISHED
+
+    @cached_property
+    def folder(self) -> Path:
+        return self.options.out_dir
 
     def to_json(self) -> dict:
         return {
@@ -60,11 +72,11 @@ class UiJob:
             "stage": self.stage,
             "percent": self.percent,
             "processing": self.processing,
-            "files": [{"name": path.name, "size": _size(path)} for path in self.files],
-            "folder": str(self.options.out_dir),
+            "files": [{"name": saved.path.name, "size": saved.size} for saved in self.files],
+            "folder": str(self.folder),
             "warnings": list(self.warnings),
             "error": self.error,
-            "command": command_line(self.options, self.url),
+            "command": self.command,
             "log_count": self.log_count,
         }
 
@@ -80,38 +92,63 @@ class JobManager:
         self._pending: queue.Queue[UiJob | None] = queue.Queue()
         self._ids = itertools.count(1)
         self._revision = 0
-        self._info: dict[str, VideoInfo] = {}
+        self._info: dict[tuple[str, bool], VideoInfo] = {}
+        self._looking: dict[tuple[str, bool], Future[VideoInfo]] = {}
+        self._closed = False
         self._worker = threading.Thread(target=self._work, daemon=True, name="yt-downloads")
         self._worker.start()
 
     # ---- what the HTTP handlers call -------------------------------------------------
 
     def info(self, url: str, insecure: bool = False) -> VideoInfo:
-        """Look a URL up once and remember the answer for the job that follows."""
+        """Look a URL up once and remember the answer for the job that follows.
+
+        A second caller for the same URL waits for the first instead of asking YouTube
+        again, which is what happens when a button is pressed before the preview arrived.
+        """
+        key = (url, insecure)
         with self._changed:
-            cached = self._info.get(url)
-        if cached is not None:
-            return cached
-        found = self._probe(url, insecure=insecure)
-        with self._changed:
-            self._info[url] = found
-            while len(self._info) > INFO_CACHE_SIZE:
-                self._info.pop(next(iter(self._info)))
-        return found
+            cached = self._info.get(key)
+            if cached is not None:
+                return cached
+            pending = self._looking.get(key)
+            if pending is None:
+                lookup = self._looking[key] = Future()
+        if pending is not None:
+            return pending.result()
+
+        try:
+            found = self._probe(url, insecure=insecure)
+            with self._changed:
+                self._info[key] = found
+                if len(self._info) > INFO_CACHE_SIZE:
+                    self._info.pop(next(iter(self._info)))
+            lookup.set_result(found)
+            return found
+        except BaseException as error:
+            lookup.set_exception(error)  # release every waiter, also when the lookup fails
+            raise
+        finally:
+            with self._changed:
+                del self._looking[key]
 
     def submit(self, urls: list[str], options: Options) -> list[UiJob]:
-        """Queue one job per URL, each with its own frozen copy of the options."""
-        jobs = []
+        """Queue one job per URL, each with its own copy of the options."""
         with self._changed:
-            for url in urls:
-                job = UiJob(id=str(next(self._ids)), url=url, options=replace(options, urls=[url]))
-                self._describe(job, self._info.get(url))
-                self._jobs[job.id] = job
-                jobs.append(job)
+            if self._closed:
+                raise AppError("The download queue is shutting down.")
+            jobs = [self._enqueue(url, options) for url in urls]
             self._bump()
-        for job in jobs:
-            self._pending.put(job)
         return jobs
+
+    def _enqueue(self, url: str, options: Options, entry: VideoInfo | None = None) -> UiJob:
+        """Add one job while holding the queue lock. Prefer full metadata to a playlist entry."""
+        frozen = replace(options, urls=[url])
+        job = UiJob(str(next(self._ids)), url, frozen, command_line(frozen, url))
+        self._describe(job, self._info.get((url, options.insecure)) or entry)
+        self._jobs[job.id] = job
+        self._pending.put(job)
+        return job
 
     def cancel(self, job_id: str) -> bool:
         """Stop a job: at once when it is still queued, at the next checkpoint otherwise."""
@@ -158,9 +195,11 @@ class JobManager:
     def shutdown(self, timeout: float = 5.0) -> None:
         """Stop everything and give the worker a moment to clean up its temp files."""
         with self._changed:
-            for job in self._jobs.values():
-                job.stop.set()
-        self._pending.put(None)
+            if not self._closed:
+                self._closed = True
+                for job in self._jobs.values():
+                    job.stop.set()
+                self._pending.put(None)
         self._worker.join(timeout)
 
     # ---- the worker thread -----------------------------------------------------------
@@ -170,23 +209,28 @@ class JobManager:
             job = self._pending.get()
             if job is None:
                 return
-            if job.finished:  # cancelled while it was still waiting
-                continue
+            with self._changed:
+                if job.stop.is_set():
+                    self._set(job, status="cancelled")
+                    continue
+                self._set(job, status="running")
             self._run(job)
 
     def _run(self, job: UiJob) -> None:
-        self._set(job, status="running")
         try:
             if is_playlist_url(job.url):
                 self._expand(job)
                 return
-            self._name(job)
-            result = self._download(
+            found = self._look_up(job)
+            if job.stop.is_set():
+                raise DownloadCancelled("stopped by the user")
+            self._download(
                 job.options,
                 job.url,
                 lambda line: self._log(job, line),
                 job.stop.is_set,
                 lambda kind, details: self._notify(job, kind, details),
+                found.tracks if found else None,
             )
         except DownloadCancelled:
             self._set(job, status="cancelled")
@@ -195,31 +239,40 @@ class JobManager:
         except Exception as error:  # yt-dlp and ffmpeg raise a wide range of errors
             self._set(job, status="failed", error=f"unexpected error: {error}")
         else:
-            self._set(
-                job, status="done", files=list(result.files), warnings=list(result.warnings), percent=100.0
-            )
+            # The files and warnings arrived as events while the download ran.
+            self._set(job, status="done", percent=100.0)
 
     def _expand(self, job: UiJob) -> None:
         """Replace a playlist job with one job per video."""
         self._set(job, stage="playlist")
-        entries = self._probe(job.url, insecure=job.options.insecure).entries
-        if not entries:
-            raise AppError("This playlist has no videos.")
+        entries = self.info(job.url, job.options.insecure).entries
         with self._changed:
+            if job.stop.is_set():
+                raise DownloadCancelled("stopped by the user")
+            if not entries:
+                raise AppError("This playlist has no videos.")
             self._jobs.pop(job.id, None)
-        self.submit(list(entries), job.options)
+            for entry in entries:
+                self._enqueue(entry.url, job.options, entry)
+            self._bump()
 
-    def _name(self, job: UiJob) -> None:
-        """Give the job its video title when the page did not look the URL up first."""
-        if job.title:
-            return
+    def _look_up(self, job: UiJob) -> VideoInfo | None:
+        """The video's details, when the job still needs something from them.
+
+        That is its title, unless the page or the playlist already supplied one, and the
+        subtitle languages, which the download would otherwise ask YouTube for again.
+        """
+        if job.title and "s" not in job.options.modes:
+            return None
         try:
             found = self.info(job.url, job.options.insecure)
         except AppError:
-            return  # the download reports what is wrong with the URL
+            return None  # the download reports what is wrong with the URL
         with self._changed:
-            self._describe(job, found)
-            self._bump()
+            if not job.title:
+                self._describe(job, found)
+                self._bump()
+        return found
 
     @staticmethod
     def _describe(job: UiJob, found: VideoInfo | None) -> None:
@@ -229,18 +282,25 @@ class JobManager:
 
     def _notify(self, job: UiJob, kind: str, details: dict) -> None:
         """Fold one structured download event into the job the page is watching."""
+        saved = None
+        if kind == "saved":
+            path = Path(details["path"])
+            saved = SavedFile(path, _size(path))  # stat before taking the lock
         with self._changed:
+            before = (job.stage, job.percent, job.processing, len(job.files), len(job.warnings))
             if kind == "stage":
                 job.stage, job.percent, job.processing = details["stage"], None, False
             elif kind == "progress":
                 job.stage, job.percent, job.processing = details["stage"], details["percent"], False
             elif kind == "processing":
                 job.percent, job.processing = None, True
-            elif kind == "saved":
-                job.files.append(Path(details["path"]))
+            elif saved is not None:
+                job.files.append(saved)
             elif kind == "warning":
                 job.warnings.append(details["message"])
-            self._bump()
+            # yt-dlp reports far more often than the rounded percentage moves.
+            if before != (job.stage, job.percent, job.processing, len(job.files), len(job.warnings)):
+                self._bump()
 
     def _log(self, job: UiJob, line: str) -> None:
         with self._changed:
@@ -260,41 +320,6 @@ class JobManager:
         """Callers hold the lock. Wakes everyone blocked in wait()."""
         self._revision += 1
         self._changed.notify_all()
-
-
-def command_line(options: Options, url: str) -> str:
-    """The `yt` command that does what this job does, to show under it in the page."""
-    modes = options.modes
-    if modes == ALL_MODES:
-        words = ["all"]
-    else:
-        names = {
-            "a": "mp3" if options.audio_format == "mp3" else "audio",
-            "v": "mp4" if options.video_format == "mp4" else "video",
-            "s": "sub",
-        }
-        words = [names[letter] for letter in modes]
-
-    flags: list[str] = []
-
-    def add(flag: str, key: str, value: str) -> None:
-        if value != DEFAULTS[key]:
-            flags.extend([flag, value])
-
-    if "s" in modes:
-        add("-l", "sub_langs", ",".join(options.sub_langs))
-        add("-f", "sub_formats", ",".join(options.sub_formats))
-        if not options.auto_subs:
-            flags.append("--no-auto-subs")
-    if "v" in modes:
-        add("--vq", "video_quality", options.video_quality)
-        add("--video-format", "video_format", options.video_format)
-    if "a" in modes:
-        add("--aq", "audio_quality", options.audio_quality)
-        add("--audio-format", "audio_format", options.audio_format)
-
-    argv = ["yt", *words, url, *flags, "-o", options.output]
-    return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)
 
 
 def _size(path: Path) -> int:

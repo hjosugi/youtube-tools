@@ -28,7 +28,7 @@ irm https://raw.githubusercontent.com/hjosugi/youtube-tools/main/install.ps1 | i
 
 インストーラーは `yt` を `~/.local/bin`（Windows は `%LOCALAPPDATA%\Programs\yt`）に置き、
 リリースの `SHA256SUMS` でダウンロードを検証します。Linux と Windows ではアプリ一覧に **yt** を追加し、
-fish と bash の補完も入れます。もう一度実行すると更新です。
+インストール済みのシェル用の補完も配置します。もう一度実行すると更新です。
 `YT_INSTALL_DIR` と `YT_VERSION`（例: `v1.1.0`）で置き場所と版を変えられます。
 
 [Releases](https://github.com/hjosugi/youtube-tools/releases) から自分でダウンロードすることもできます。
@@ -98,7 +98,7 @@ yt            # yt ui、yt --gui でも同じ
 ## コマンドライン
 
 ```bash
-yt [mp3|mp4|sub|all] URL... [オプション]
+yt [a|v|s|av|mp3|mp4|sub|all] URL... [オプション]
 ```
 
 ### 何をダウンロードするか
@@ -112,8 +112,7 @@ yt mp3 sub URL     # 言葉は組み合わせられる
 yt URL             # 保存済みの既定値（初期状態は字幕）
 ```
 
-`-m` は同じことを文字で指定します。`a`（音声）・`v`（動画）・`s`（字幕）を使い、`-m avs`、`-m av`、`-m all` のように書きます。
-言葉・URL・オプションの順番は自由です。URL なしの `yt mp3` は URL を尋ねます。
+音声は `yt a URL`、動画は `yt v URL`、字幕は `yt s URL` で取得できます。`av`、`as`、`vs`、`avs` と組み合わせても、`-m` に続けて指定しても使えます。言葉・URL・オプションの順番は自由です。ターミナルで `yt mp3` だけを入力すると、URL を尋ねます。
 
 ### 字幕
 
@@ -215,26 +214,22 @@ yt -i
 | `--save-config` | 現在のオプションを既定値として保存 |
 | `--show-config` | 有効な既定値を表示 |
 | `--config-path` | 設定ファイルの場所を表示 |
+| `-c`, `--completion SHELL` | `bash`・`zsh`・`fish`・`pwsh`・`powershell` の補完スクリプトを表示 |
 | `--insecure` | TLS 証明書の検証を省略（最終手段） |
 | `--version` | バージョンを表示 |
 
 ## シェル補完
 
-インストーラーが fish と bash の補完を入れます。手動で入れる場合は `completions/` から:
+`yt ` の後で Tab を押すと操作の候補が、`yt v --vq ` の後なら画質の候補が出ます。単体バイナリにも Python 版にも4シェル分の補完が入っています。今のターミナルで有効にするには、使っているシェルの行を実行します。
 
-```bash
-# bash
-cp completions/yt.bash ~/.local/share/bash-completion/completions/yt
+| シェル | 今すぐ有効にする方法 |
+| --- | --- |
+| Bash | `source <(yt -c bash)` |
+| Zsh | `autoload -Uz compinit && compinit` の後で `source <(yt -c zsh)` |
+| fish | `yt -c fish \| source` |
+| PowerShell | `yt -c pwsh \| Out-String \| Invoke-Expression` |
 
-# zsh （$fpath 上の任意のディレクトリ）
-cp completions/yt.zsh ~/.zsh/completions/_yt
-
-# fish
-cp completions/yt.fish ~/.config/fish/completions/yt.fish
-
-# PowerShell
-Add-Content $PROFILE ". path\to\completions\yt.ps1"
-```
+Linux・macOS のインストーラーは、Bash・fish があれば各シェルのユーザー用補完ディレクトリに配置します。Zsh は `~/.zshrc` の `compinit` より前に `fpath=("${XDG_DATA_HOME:-$HOME/.local/share}/zsh/site-functions" $fpath)` を追加してください。Windows ではインストールした PowerShell ですぐに補完が有効になり、次回も使うために `$PROFILE` に追加する1行が表示されます。
 
 ## 開発
 

@@ -14,21 +14,16 @@ import re
 import secrets
 import socketserver
 import sys
-import threading
 import time
-from dataclasses import replace
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from importlib import resources
 from urllib.parse import parse_qs, urlsplit
 
-from ... import __version__, ffmpeg
-from ...models import AUDIO_FORMATS, AUDIO_QUALITIES, VIDEO_FORMATS, VIDEO_QUALITIES, AppError
-from ...modes import parse_modes
-from ...settings import DEFAULTS, Options, config_path, save_config
-from ...subtitles import SUBTITLE_FORMATS
+from ... import __version__
+from ...models import AppError
 from . import system
-from .jobs import JobManager
+from .app import App
 
 HOST = "127.0.0.1"
 MAX_BODY = 256 * 1024
@@ -60,125 +55,15 @@ Run <code>yt</code> again and use the tab it opens.</p>
 もう一度 <code>yt</code> を起動してください。</p>
 """
 
-ROUTES: tuple[tuple[str, re.Pattern[str], str], ...] = tuple(
-    (method, re.compile(pattern), name)
-    for method, pattern, name in (
-        ("GET", r"/", "page"),
-        ("GET", r"/assets/(?P<name>[\w.-]+)", "asset"),
-        ("GET", r"/api/ping", "ping"),
-        ("GET", r"/api/state", "state"),
-        ("GET", r"/api/events", "events"),
-        ("GET", r"/api/folders", "folders"),
-        ("GET", r"/api/jobs/(?P<job>\d+)/log", "job_log"),
-        ("POST", r"/api/info", "info"),
-        ("POST", r"/api/jobs", "submit"),
-        ("POST", r"/api/jobs/clear", "clear"),
-        ("POST", r"/api/jobs/(?P<job>\d+)/cancel", "cancel"),
-        ("POST", r"/api/settings", "settings"),
-        ("POST", r"/api/open", "open"),
-        ("POST", r"/api/quit", "quit"),
-    )
-)
+
+def start_url(port: int, token: str) -> str:
+    """The link that lets a browser in: the page, with the secret that buys the cookie."""
+    return f"http://{HOST}:{port}/?k={token}"
 
 
-class App:
-    """Everything the handlers share: the current settings, the queue and who is watching."""
-
-    def __init__(
-        self,
-        options: Options,
-        token: str | None = None,
-        manager: JobManager | None = None,
-        linger: float | None = None,
-        folder_is_default: bool = False,
-    ) -> None:
-        self.options = options
-        # True while the folder is only our stand-in for "not set" (Downloads). It is then
-        # kept out of the config file, so the command line still defaults to the current
-        # directory until a folder is really chosen in the page.
-        self.folder_is_default = folder_is_default
-        self.token = token or secrets.token_urlsafe(24)
-        self.manager = manager or JobManager()
-        self.linger = linger
-        self.stop = threading.Event()
-        self._lock = threading.Lock()
-        self._clients = 0
-        self._last_seen = time.monotonic()
-
-    def client_connected(self) -> None:
-        with self._lock:
-            self._clients += 1
-
-    def client_gone(self) -> None:
-        with self._lock:
-            self._clients -= 1
-            self._last_seen = time.monotonic()
-
-    def abandoned(self) -> bool:
-        """True once no tab has been open for `linger` seconds and nothing is downloading."""
-        if self.linger is None:
-            return False
-        with self._lock:
-            if self._clients:
-                return False
-            idle = time.monotonic() - self._last_seen
-        if self.manager.active():
-            with self._lock:
-                self._last_seen = time.monotonic()
-            return False
-        return idle > self.linger
-
-    def state(self) -> dict:
-        """What the page needs to draw itself from scratch."""
-        _revision, jobs = self.manager.snapshot()
-        return {
-            "version": __version__,
-            "options": self.options.to_config(),
-            "folder": str(self.options.out_dir),
-            "folder_label": system.short_path(self.options.out_dir),
-            "choices": {
-                "video_quality": VIDEO_QUALITIES,
-                "video_format": VIDEO_FORMATS,
-                "audio_quality": AUDIO_QUALITIES,
-                "audio_format": AUDIO_FORMATS,
-                "sub_formats": SUBTITLE_FORMATS,
-            },
-            "ffmpeg": ffmpeg.status(),
-            "first_run": not config_path().is_file(),
-            "jobs": jobs,
-        }
-
-    def update_options(self, changes: dict) -> None:
-        """Apply settings sent by the page and remember them as the new defaults."""
-        merged = self.options.to_config()
-        for key, value in changes.items():
-            if key not in DEFAULTS:
-                continue
-            if isinstance(DEFAULTS[key], bool):
-                if not isinstance(value, bool):
-                    raise AppError(f"{key} must be true or false.")
-                merged[key] = value
-            elif isinstance(value, list | tuple):
-                merged[key] = ",".join(str(item) for item in value)
-            elif isinstance(value, str):
-                merged[key] = value.strip()
-            else:
-                raise AppError(f"{key} must be text.")
-        if not merged["output"]:
-            raise AppError("Choose a folder to save to.")
-        updated = Options.from_config(merged)
-        updated.insecure = self.options.insecure
-        if "output" in changes:
-            self.folder_is_default = False
-        self.options = updated
-        self.remember()
-
-    def remember(self) -> None:
-        """Write the current settings to the config file as the new defaults."""
-        config = self.options.to_config()
-        if self.folder_is_default:
-            config["output"] = DEFAULTS["output"]
-        save_config(config)
+def cookie_name(port: int) -> str:
+    """Cookies are shared between the ports of one host, so the port is part of the name."""
+    return f"yt_{port}"
 
 
 class UiServer(ThreadingHTTPServer):
@@ -199,17 +84,16 @@ class UiServer(ThreadingHTTPServer):
         only to fill in a server name that nothing here reads.
         """
         socketserver.TCPServer.server_bind(self)
-        self.server_name = HOST
-        self.server_port = self.server_address[1]
+        self.server_name, self.server_port = self.server_address[:2]
 
     @property
     def port(self) -> int:
         return self.server_address[1]
 
     @property
-    def cookie_name(self) -> str:
-        # Cookies are shared between ports of one host, so the port is part of the name.
-        return f"yt_{self.port}"
+    def hosts(self) -> tuple[str, str]:
+        """The two spellings of our own address a browser may use."""
+        return f"{HOST}:{self.port}", f"localhost:{self.port}"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -233,19 +117,21 @@ class Handler(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         self.query = parse_qs(url.query)
         try:
-            if not self._host_is_ours():
+            if self.headers.get("Host", "") not in self.server.hosts:
                 return self._refuse(b"forbidden", "text/plain")
             fresh_login = method == "GET" and url.path == "/" and self._has_start_key()
             if not (fresh_login or self._has_cookie()):
                 return self._refuse(LOCKED_OUT.encode(), "text/html; charset=utf-8")
             if method == "POST" and not self._is_same_origin_json():
                 return self._refuse(b"forbidden", "text/plain")
-            for route_method, pattern, name in ROUTES:
+            for route_method, pattern, route in ROUTES:
                 match = pattern.fullmatch(url.path)
                 if match and route_method == method:
-                    return getattr(self, f"_route_{name}")(**match.groupdict())
-            self.close_connection = True
-            self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+                    # Browsers reuse this connection even when the handler ignores its JSON.
+                    if method == "POST":
+                        return route(self, self._body(), **match.groupdict())
+                    return route(self, **match.groupdict())
+            self._not_found()
         except AppError as error:
             self.close_connection = True  # the request body may not have been read
             self._json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
@@ -259,16 +145,18 @@ class Handler(BaseHTTPRequestHandler):
         self.close_connection = True
         self._send(HTTPStatus.FORBIDDEN, body, content_type)
 
-    def _host_is_ours(self) -> bool:
-        port = self.server.port
-        return self.headers.get("Host", "") in {f"{HOST}:{port}", f"localhost:{port}"}
+    def _not_found(self) -> None:
+        self.close_connection = True
+        self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+
+    def _cookie(self) -> str:
+        return f"{cookie_name(self.server.port)}={self.server.app.token}"
 
     def _has_start_key(self) -> bool:
-        key = (self.query.get("k") or [""])[0]
-        return secrets.compare_digest(key.encode(), self.server.app.token.encode())
+        return secrets.compare_digest(self._query("k").encode(), self.server.app.token.encode())
 
     def _has_cookie(self) -> bool:
-        wanted = f"{self.server.cookie_name}={self.server.app.token}".encode()
+        wanted = self._cookie().encode()
         return any(
             secrets.compare_digest(part.strip().encode(), wanted)
             for part in self.headers.get("Cookie", "").split(";")
@@ -276,13 +164,21 @@ class Handler(BaseHTTPRequestHandler):
 
     def _is_same_origin_json(self) -> bool:
         origin = self.headers.get("Origin")
-        port = self.server.port
-        if origin is not None and origin not in {f"http://{HOST}:{port}", f"http://localhost:{port}"}:
+        if origin is not None and origin not in {f"http://{host}" for host in self.server.hosts}:
             return False
         return self.headers.get("Content-Type", "").split(";")[0].strip() == "application/json"
 
+    def _query(self, name: str) -> str:
+        """One query parameter, or an empty string."""
+        return (self.query.get(name) or [""])[0]
+
     def _body(self) -> dict:
-        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length < 0:
+                raise ValueError
+        except ValueError as error:
+            raise AppError("Invalid Content-Length.") from error
         if length > MAX_BODY:
             raise AppError("Request too large.")
         try:
@@ -300,10 +196,7 @@ class Handler(BaseHTTPRequestHandler):
         for name, value in SECURITY_HEADERS.items():
             self.send_header(name, value)
         if cookie:
-            self.send_header(
-                "Set-Cookie",
-                f"{self.server.cookie_name}={self.server.app.token}; Path=/; HttpOnly; SameSite=Strict",
-            )
+            self.send_header("Set-Cookie", f"{self._cookie()}; Path=/; HttpOnly; SameSite=Strict")
         self.end_headers()
         self.wfile.write(body)
 
@@ -318,7 +211,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def _route_asset(self, name: str) -> None:
         if name not in ASSETS:
-            return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+            return self._not_found()
         self._send(HTTPStatus.OK, _asset(name), ASSETS[name])
 
     # ---- reading ---------------------------------------------------------------------
@@ -330,12 +223,12 @@ class Handler(BaseHTTPRequestHandler):
         self._json(self.server.app.state())
 
     def _route_folders(self) -> None:
-        self._json(system.list_folders((self.query.get("path") or [""])[0]))
+        self._json(system.list_folders(self._query("path")))
 
     def _route_job_log(self, job: str) -> None:
         lines = self.server.app.manager.log_lines(job)
         if lines is None:
-            return self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+            return self._not_found()
         self._json({"lines": lines})
 
     def _route_events(self) -> None:
@@ -348,29 +241,28 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.close_connection = True
 
-        app.client_connected()
-        revision = -1
+        app.tab_opened()
+        revision = -1  # no real revision is negative, so the first wait returns at once
         try:
             while not app.stop.is_set():
-                current, jobs = app.manager.snapshot()
-                if current != revision:
-                    revision = current
-                    self.wfile.write(f"event: jobs\ndata: {json.dumps({'jobs': jobs})}\n\n".encode())
-                    self.wfile.flush()
-                    time.sleep(EVENT_INTERVAL)
-                elif app.manager.wait(revision, HEARTBEAT) == revision:
+                if app.manager.wait(revision, HEARTBEAT) == revision:
                     self.wfile.write(b": still here\n\n")
                     self.wfile.flush()
+                    continue
+                revision, jobs = app.manager.snapshot()
+                self.wfile.write(f"event: jobs\ndata: {json.dumps({'jobs': jobs})}\n\n".encode())
+                self.wfile.flush()
+                time.sleep(EVENT_INTERVAL)
         except OSError:
             pass  # the tab was closed
         finally:
-            app.client_gone()
+            app.tab_closed()
 
     # ---- doing -----------------------------------------------------------------------
 
-    def _route_info(self) -> None:
+    def _route_info(self, body: dict) -> None:
         app = self.server.app
-        url = _clean_urls([self._body().get("url")])[0]
+        url = _clean_urls([body.get("url")])[0]
         found = app.manager.info(url, app.options.insecure)
         self._json(
             {
@@ -385,35 +277,27 @@ class Handler(BaseHTTPRequestHandler):
             }
         )
 
-    def _route_submit(self) -> None:
-        app = self.server.app
-        body = self._body()
-        urls = _clean_urls(body.get("urls"))
-        modes = parse_modes(str(body.get("mode") or app.options.modes))
-        # The button pressed last becomes the default one, so Enter repeats it next time.
-        app.options = replace(app.options, modes=modes)
-        app.remember()
-        jobs = app.manager.submit(urls, app.options)
+    def _route_submit(self, body: dict) -> None:
+        jobs = self.server.app.submit(_clean_urls(body.get("urls")), str(body.get("mode") or ""))
         self._json({"jobs": [job.id for job in jobs]})
 
-    def _route_clear(self) -> None:
+    def _route_clear(self, _body: dict) -> None:
         self.server.app.manager.clear()
         self._json({"ok": True})
 
-    def _route_cancel(self, job: str) -> None:
+    def _route_cancel(self, _body: dict, job: str) -> None:
         self._json({"ok": self.server.app.manager.cancel(job)})
 
-    def _route_settings(self) -> None:
+    def _route_settings(self, body: dict) -> None:
         app = self.server.app
-        app.update_options(self._body())
+        app.update_options(body)
         self._json(app.state())
 
-    def _route_open(self) -> None:
+    def _route_open(self, body: dict) -> None:
         """Open the output folder, or a finished file, picked from what the server knows."""
         app = self.server.app
-        body = self._body()
         if body.get("job") is None:
-            target = app.options.out_dir
+            target = app.current.out_dir
             target.mkdir(parents=True, exist_ok=True)
         else:
             job = app.manager.get(str(body["job"]))
@@ -421,17 +305,39 @@ class Handler(BaseHTTPRequestHandler):
                 raise AppError("That download is no longer in the list.")
             index = body.get("file")
             if index is None:
-                target = job.options.out_dir
+                target = job.folder
             elif isinstance(index, int) and 0 <= index < len(job.files):
-                target = job.files[index]
+                target = job.files[index].path
             else:
                 raise AppError("No such file.")
         system.open_path(target)
         self._json({"ok": True})
 
-    def _route_quit(self) -> None:
+    def _route_quit(self, _body: dict) -> None:
         self._json({"ok": True})
         self.server.app.stop.set()
+
+
+# Checked in order; a named group becomes the handler's argument.
+ROUTES = tuple(
+    (method, re.compile(pattern), route)
+    for method, pattern, route in (
+        ("GET", r"/", Handler._route_page),
+        ("GET", r"/assets/(?P<name>[\w.-]+)", Handler._route_asset),
+        ("GET", r"/api/ping", Handler._route_ping),
+        ("GET", r"/api/state", Handler._route_state),
+        ("GET", r"/api/events", Handler._route_events),
+        ("GET", r"/api/folders", Handler._route_folders),
+        ("GET", r"/api/jobs/(?P<job>\d+)/log", Handler._route_job_log),
+        ("POST", r"/api/info", Handler._route_info),
+        ("POST", r"/api/jobs", Handler._route_submit),
+        ("POST", r"/api/jobs/clear", Handler._route_clear),
+        ("POST", r"/api/jobs/(?P<job>\d+)/cancel", Handler._route_cancel),
+        ("POST", r"/api/settings", Handler._route_settings),
+        ("POST", r"/api/open", Handler._route_open),
+        ("POST", r"/api/quit", Handler._route_quit),
+    )
+)
 
 
 def _asset(name: str) -> bytes:

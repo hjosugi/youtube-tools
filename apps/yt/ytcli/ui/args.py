@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import shlex
+import subprocess
+import sys
 
 from .. import __version__
 from ..models import AUDIO_FORMATS, AUDIO_QUALITIES, VIDEO_FORMATS, VIDEO_QUALITIES
-from ..modes import MODE_ALIASES, parse_modes
-from ..settings import Options, config_path, validate_sub_formats
+from ..modes import ALL_MODES, MODE_ALIASES, parse_modes
+from ..settings import DEFAULTS, Options, config_path, validate_sub_formats
 from ..subtitles import SUBTITLE_FORMATS
 from ..utils import split_list
 
@@ -14,8 +17,15 @@ PASS_THROUGH = ("video_quality", "video_format", "audio_quality", "audio_format"
 
 # Plain words accepted next to the URLs, so nobody has to remember `-m a` or `--gui`:
 # `yt mp3 URL`, `yt mp4 sub URL`, `yt ui`.
-MODE_WORDS = frozenset(MODE_ALIASES) | {"all"}
+MODE_WORDS = frozenset(MODE_ALIASES) | {"a", "v", "s", "av", "as", "vs", ALL_MODES, "all"}
 UI_WORDS = frozenset({"ui", "gui"})
+COMPLETION_FILES = {
+    "bash": "yt.bash",
+    "zsh": "yt.zsh",
+    "fish": "yt.fish",
+    "pwsh": "yt.ps1",
+    "powershell": "yt.ps1",
+}
 
 
 def epilog() -> str:
@@ -27,6 +37,9 @@ examples:
   yt mp4 URL                      video as MP4
   yt sub URL                      subtitles in the configured default languages
   yt all URL                      audio, video and subtitles in one run
+  yt s URL                        one-letter form (a for audio, v for video, s for subtitles)
+  yt av URL                       audio and video together
+  yt -c bash                      print the Bash tab completion script
   yt sub URL -l en,ja             English and Japanese subtitles
   yt sub URL -l all               every subtitle track the video offers
   yt mp4 URL --vq 1080            video capped at 1080p
@@ -50,7 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
         "urls",
         nargs="*",
         metavar="WORD|URL",
-        help="YouTube URLs, optionally with what to get: mp3, mp4, sub, all. `ui` opens the web UI",
+        help="YouTube URLs and what to get: a/mp3, v/mp4, s/sub, av or all. `ui` opens the web UI",
     )
     parser.add_argument(
         "-m",
@@ -114,6 +127,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--show-config", action="store_true", help="print the effective defaults and exit")
     parser.add_argument("--config-path", action="store_true", help="print the config file path and exit")
     parser.add_argument("--version", action="version", version=f"yt {__version__}")
+    parser.add_argument(
+        "-c",
+        "--completion",
+        choices=COMPLETION_FILES,
+        help="print this shell's tab completion script and exit",
+    )
     return parser
 
 
@@ -125,13 +144,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def absorb_words(args: argparse.Namespace) -> argparse.Namespace:
     """Turn `yt mp3 sub URL` into `yt URL -m mp3,sub`, and `yt ui` into `yt --gui`."""
-    words = [token.lower() for token in args.urls if token.lower() in MODE_WORDS | UI_WORDS]
-    args.urls = [token for token in args.urls if token.lower() not in MODE_WORDS | UI_WORDS]
-    modes = [word for word in words if word in MODE_WORDS]
+    urls: list[str] = []
+    modes: list[str] = [args.mode] if args.mode else []
+    for token in args.urls:
+        word = token.lower()
+        if word in MODE_WORDS:
+            modes.append(word)
+        elif word in UI_WORDS:
+            args.gui = True
+        else:
+            urls.append(token)
+    args.urls = urls
     if modes:
-        args.mode = ",".join(([args.mode] if args.mode else []) + modes)
-    if any(word in UI_WORDS for word in words):
-        args.gui = True
+        args.mode = ",".join(modes)
     return args
 
 
@@ -152,3 +177,42 @@ def apply_overrides(options: Options, args: argparse.Namespace) -> Options:
             setattr(options, name, value)
     options.insecure = args.insecure
     return options
+
+
+def command_line(options: Options, url: str) -> str:
+    """The `yt` command that downloads `url` with these options: the parser in reverse.
+
+    It spells out only what differs from the built-in defaults, plus the folder.
+    """
+    config = options.to_config()
+    modes = options.modes
+    if modes == ALL_MODES:
+        words = ["all"]
+    else:
+        names = {
+            "a": "mp3" if options.audio_format == "mp3" else "audio",
+            "v": "mp4" if options.video_format == "mp4" else "video",
+            "s": "sub",
+        }
+        words = [names[letter] for letter in modes]
+
+    flags: list[str] = []
+
+    def add(flag: str, key: str) -> None:
+        if config[key] != DEFAULTS[key]:
+            flags.extend([flag, config[key]])
+
+    if "s" in modes:
+        add("-l", "sub_langs")
+        add("-f", "sub_formats")
+        if not options.auto_subs:
+            flags.append("--no-auto-subs")
+    if "v" in modes:
+        add("--vq", "video_quality")
+        add("--video-format", "video_format")
+    if "a" in modes:
+        add("--aq", "audio_quality")
+        add("--audio-format", "audio_format")
+
+    argv = ["yt", *words, url, *flags, "-o", config["output"]]
+    return subprocess.list2cmdline(argv) if sys.platform == "win32" else shlex.join(argv)

@@ -8,21 +8,17 @@ pinned SHA-256 and keep it in the cache directory, so it is fetched once per mac
 
 from __future__ import annotations
 
-import hashlib
 import os
 import platform
 import shutil
-import ssl
 import sys
 import threading
-import urllib.request
-import zipfile
 from collections.abc import Callable
 from pathlib import Path
 
-from .models import AppError
+from .models import AppError, Logger, silent
+from .settings.storage import APP_NAME
 
-Logger = Callable[[str], None]
 Progress = Callable[[int, int], None]
 
 # Bump the version and every digest together; Dependabot cannot see this pin.
@@ -80,10 +76,10 @@ def cache_dir() -> Path:
         return Path(override).expanduser()
     if sys.platform == "win32":
         base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-        return base / "yt" / "Cache"
+        return base / APP_NAME / "Cache"
     if sys.platform == "darwin":
-        return Path.home() / "Library" / "Caches" / "yt"
-    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "yt"
+        return Path.home() / "Library" / "Caches" / APP_NAME
+    return Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / APP_NAME
 
 
 def cached_path() -> Path:
@@ -111,7 +107,7 @@ def ensure(log: Logger | None = None, progress: Progress | None = None) -> str |
     target = cached_path()
     with _download_lock:  # two jobs starting together must not download twice
         if not target.is_file():
-            download(target, log or _silent, progress)
+            download(target, log or silent, progress)
     return str(target)
 
 
@@ -140,6 +136,10 @@ def download(target: Path, log: Logger, progress: Progress | None = None) -> Non
 
 def fetch(url: str, archive: Path, digest: str, progress: Progress | None) -> None:
     """Stream the wheel to disk, failing when its SHA-256 is not the pinned one."""
+    # Imported here: this runs once per machine, and `yt --help` should not pay for it.
+    import hashlib
+    import urllib.request
+
     sha = hashlib.sha256()
     with urllib.request.urlopen(url, timeout=60, context=_tls_context()) as response:
         total = int(response.headers.get("Content-Length") or 0)
@@ -157,6 +157,8 @@ def fetch(url: str, archive: Path, digest: str, progress: Progress | None) -> No
 
 def unpack(archive: Path, target: Path) -> None:
     """Pull the single ffmpeg executable out of the wheel and make it runnable."""
+    import zipfile
+
     with zipfile.ZipFile(archive) as wheel:
         members = [name for name in wheel.namelist() if "/binaries/ffmpeg" in name]
         if not members:
@@ -168,14 +170,12 @@ def unpack(archive: Path, target: Path) -> None:
     partial.replace(target)  # atomic, so a half-written file is never mistaken for ffmpeg
 
 
-def _tls_context() -> ssl.SSLContext:
+def _tls_context():
     """Frozen builds have no system CA store, so prefer certifi's bundle."""
+    import ssl
+
     try:
         import certifi
     except ImportError:
         return ssl.create_default_context()
     return ssl.create_default_context(cafile=certifi.where())
-
-
-def _silent(_line: str) -> None:
-    """Default logger for callers that only want the path."""

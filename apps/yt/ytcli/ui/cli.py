@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from importlib.resources import files
 
 from ..download import download_all, list_subtitles
 from ..models import AppError
 from ..modes import describe_modes
 from ..settings import Options, config_path, format_config, save_config
-from ..utils import split_list
 from . import prompts
-from .args import apply_overrides, parse_args
+from .args import COMPLETION_FILES, apply_overrides, parse_args
 from .wizard import PromptCancelled, run_wizard
 
 
@@ -32,6 +32,10 @@ def main(argv: list[str] | None = None) -> int:
 
 def run(args: argparse.Namespace) -> int:
     """Dispatch to whichever mode the flags asked for."""
+    if args.completion:
+        script = files("ytcli").joinpath("completions", COMPLETION_FILES[args.completion])
+        sys.stdout.write(script.read_text(encoding="utf-8"))
+        return 0
     if args.config_path:
         print(config_path())
         return 0
@@ -60,7 +64,7 @@ def run(args: argparse.Namespace) -> int:
             run_wizard(options)
         elif not options.urls and sys.stdin.isatty():
             # `yt mp3` already said what to get, so the URL is the only thing left to ask.
-            options.urls = list(split_list(prompts.required("YouTube URL(s)", input)))
+            options.urls = prompts.url_list("YouTube URL(s)", input)
     except (EOFError, KeyboardInterrupt):
         print()
         return 1

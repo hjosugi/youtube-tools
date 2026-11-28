@@ -21,6 +21,11 @@ def required(label: str, input_fn: InputFn) -> str:
             return value
 
 
+def url_list(label: str, input_fn: InputFn) -> list[str]:
+    """Keep asking until at least one URL is typed; several go on one line."""
+    return list(split_list(required(label, input_fn)))
+
+
 def text(label: str, default: str, input_fn: InputFn) -> str:
     """Ask for free text, keeping the default on an empty answer."""
     return input_fn(f"{label} [{default}]: ").strip() or default

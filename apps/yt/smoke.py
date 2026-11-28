@@ -29,6 +29,12 @@ def main() -> int:
     if version.returncode != 0 or not version.stdout.startswith("yt "):
         return fail("--version did not answer")
 
+    scripts = Path(__file__).resolve().parent / "ytcli" / "completions"
+    for shell, filename in (("bash", "yt.bash"), ("zsh", "yt.zsh"), ("fish", "yt.fish"), ("pwsh", "yt.ps1")):
+        script = subprocess.run([binary, "-c", shell], capture_output=True, text=True, timeout=120)
+        if script.returncode != 0 or script.stdout != (scripts / filename).read_text(encoding="utf-8"):
+            return fail(f"the embedded {shell} completion differs from {filename}")
+
     with tempfile.TemporaryDirectory() as scratch:
         environment = os.environ | {
             "YT_CONFIG_FILE": str(Path(scratch) / "config.toml"),

@@ -62,6 +62,8 @@ yt sub URL -l en,ja        # English and Japanese subtitles
 yt mp4 URL --vq 1080       # video capped at 1080p
 ```
 
+The one-letter forms are `yt a URL` for audio, `yt v URL` for video and `yt s URL` for subtitles. Combine them as `yt av URL` for audio and video. [Enable Tab completion in Bash, Zsh, fish or PowerShell](apps/yt/README.md#shell-completion).
+
 Every option is in [`apps/yt/README.md`](apps/yt/README.md).
 
 ## It keeps itself up to date

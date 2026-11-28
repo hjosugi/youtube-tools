@@ -1,20 +1,23 @@
 """Starting and stopping the UI: one server per user, found again by a second `yt`."""
 
+import http.client
 import json
 import os
 import socket
 import sys
 import threading
 import time
+from contextlib import closing
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
-from ytcli import ui as _ui  # noqa: F401 - makes the package importable before the submodule
 from ytcli.models import AppError
 from ytcli.settings import Options, config_path
 from ytcli.ui import web
 from ytcli.ui.web import system
-from ytcli.ui.web.server import App
+from ytcli.ui.web.app import App
+from ytcli.ui.web.server import cookie_name
 
 from .conftest import wait_until
 
@@ -29,9 +32,12 @@ def running(tmp_path):
         started["url"] = url
         ready.set()
 
-    def serve(**kwargs):
+    def serve(options=None, **kwargs):
         started["code"] = web.run_ui(
-            Options(output=str(tmp_path / "out")), announce=started["lines"].append, ready=note, **kwargs
+            options or Options(output=str(tmp_path / "out")),
+            announce=started["lines"].append,
+            ready=note,
+            **kwargs,
         )
 
     def start(**kwargs):
@@ -47,16 +53,19 @@ def running(tmp_path):
         started["thread"].join(5)
 
 
-def quit_ui(url: str) -> None:
-    import http.client
+def request_ui(url, method, path):
+    address = urlsplit(url)
+    token = parse_qs(address.query)["k"][0]
+    headers = {"Cookie": f"{cookie_name(address.port)}={token}", "Content-Type": "application/json"}
+    with closing(http.client.HTTPConnection(address.hostname, address.port, timeout=5)) as connection:
+        connection.request(method, path, body="{}" if method == "POST" else None, headers=headers)
+        response = connection.getresponse()
+        assert response.status == 200
+        return json.loads(response.read())
 
-    port = int(url.split(":")[2].split("/")[0])
-    token = url.split("k=")[1]
-    connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
-    headers = {"Cookie": f"yt_{port}={token}", "Content-Type": "application/json"}
-    connection.request("POST", "/api/quit", body="{}", headers=headers)
-    connection.getresponse().read()
-    connection.close()
+
+def quit_ui(url: str) -> None:
+    request_ui(url, "POST", "/api/quit")
 
 
 def test_it_serves_opens_the_browser_and_stops_on_quit(running, desktop):
@@ -86,24 +95,15 @@ def test_a_second_yt_reopens_the_running_one(running, desktop):
     assert lines == [f"yt UI is already running: {url}"]
 
 
-def test_the_stand_in_folder_is_marked_as_not_chosen(monkeypatch, tmp_path):
-    seen: dict = {}
-
-    class Recorder(web.App):
-        def __init__(self, options, **kwargs):
-            seen.update(output=options.output, default=kwargs["folder_is_default"])
-            raise AppError("stop here")
-
-    monkeypatch.setattr(web, "App", Recorder)
+@pytest.mark.parametrize("use_default", [True, False])
+def test_startup_shows_the_effective_folder(running, monkeypatch, tmp_path, use_default):
     monkeypatch.setattr(system, "downloads_dir", lambda: tmp_path / "Downloads")
-
-    with pytest.raises(AppError):
-        web.run_ui(Options(), announce=lambda _line: None)
-    assert seen == {"output": str(tmp_path / "Downloads"), "default": True}
-
-    with pytest.raises(AppError):
-        web.run_ui(Options(output="/music"), announce=lambda _line: None)
-    assert seen == {"output": "/music", "default": False}
+    chosen = Options() if use_default else Options(output=str(tmp_path / "music"))
+    url = running(options=chosen, port=0)["url"]
+    state = request_ui(url, "GET", "/api/state")
+    assert state["folder"] == str(tmp_path / ("Downloads" if use_default else "music"))
+    request_ui(url, "POST", "/api/settings")
+    assert Options.load().output == chosen.output
 
 
 def test_no_open_leaves_the_browser_alone(running, desktop):
@@ -202,15 +202,6 @@ class TestBinding:
                 server.server_close()
 
 
-class TestDefaults:
-    def test_the_unset_folder_becomes_downloads(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(system, "downloads_dir", lambda: tmp_path / "Downloads")
-        assert web.for_the_ui(Options()).output == str(tmp_path / "Downloads")
-
-    def test_a_chosen_folder_is_kept(self):
-        assert web.for_the_ui(Options(output="/music")).output == "/music"
-
-
 class TestAbandoned:
     def app(self, manager, linger):
         return App(Options(), manager=manager, linger=linger)
@@ -226,10 +217,10 @@ class TestAbandoned:
 
     def test_an_open_tab_keeps_it_alive(self, manager):
         app = self.app(manager, 0.0)
-        app.client_connected()
+        app.tab_opened()
         time.sleep(0.01)
         assert app.abandoned() is False
-        app.client_gone()
+        app.tab_closed()
         time.sleep(0.01)
         assert app.abandoned() is True
 

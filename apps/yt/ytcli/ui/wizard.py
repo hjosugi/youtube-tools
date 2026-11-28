@@ -4,7 +4,6 @@ from ..models import AUDIO_FORMATS, AUDIO_QUALITIES, VIDEO_FORMATS, VIDEO_QUALIT
 from ..modes import describe_modes, parse_modes
 from ..settings import Options
 from ..subtitles import SUBTITLE_FORMATS
-from ..utils import split_list
 from . import prompts
 from .prompts import InputFn, OutputFn, PromptCancelled
 
@@ -25,8 +24,7 @@ def run_wizard(
     output_fn("")
 
     if not options.urls:
-        answer = prompts.required("YouTube URL(s), space or comma separated", input_fn)
-        options.urls = list(split_list(answer))
+        options.urls = prompts.url_list("YouTube URL(s), space or comma separated", input_fn)
 
     options.modes = prompts.parsed(
         "Modes: a=audio v=video s=subtitle", options.modes, parse_modes, input_fn, output_fn
